@@ -262,19 +262,25 @@ local function CreateOptionsWindow()
         RefreshCVarSearch()
     end
 
+    local rangeNote = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    rangeNote:SetPoint("TOPLEFT", 8, -4)
+    rangeNote:SetWidth(480)
+    rangeNote:SetJustifyH("LEFT")
+    rangeNote:SetText("Hinweis: Obergrenzen sind teilweise nicht für WoW Forever verifiziert.")
+
     local settings = {
-        {"groundEffectDensity", "Grasdichte", 0, 256, 256},
-        {"groundEffectDist", "Sichtweite für Gras", 0, 500, 500},
-        {"graphicsGroundClutter", "Bodendetails", 0, 9, 9},
-        {"graphicsViewDistance", "Sichtweite", 1, 9, 9},
-        {"graphicsLightMode", "Sekundäre Beleuchtung", 0, 3, 3},
-        {"sunshafts", "Sonnenstrahlen", 0, 2, 2},
-        {"shadowNumCascades", "Detaillierte Fernschatten", 0, 4, 4},
+        {"groundEffectDensity", "Grasdichte (Obergrenze nicht für Forever verifiziert)", 0, 256, 256},
+        {"groundEffectDist", "Sichtweite für Gras (allgemeiner Maximalwert 600; Forever ungeprüft)", 0, 600, 600},
+        {"graphicsGroundClutter", "Bodendetails (allgemeiner Reglerbereich 0–9; Forever ungeprüft)", 0, 9, 9},
+        {"graphicsViewDistance", "Sichtweite (Obergrenze nicht für Forever verifiziert)", 1, 9, 9},
+        {"graphicsLightMode", "Sekundäre Beleuchtung (Obergrenze nicht verifiziert)", 0, 3, 3},
+        {"sunshafts", "Sonnenstrahlen (Obergrenze nicht verifiziert)", 0, 2, 2},
+        {"shadowNumCascades", "Fernschatten (Obergrenze nicht für Forever verifiziert)", 0, 4, 4},
     }
     for index, info in ipairs(settings) do
         local settingInfo = info
         local label = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        label:SetPoint("TOPLEFT", 8, -8 - (index - 1) * 52); label:SetText(info[2])
+        label:SetPoint("TOPLEFT", 8, -30 - (index - 1) * 52); label:SetText(info[2])
         local current = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         current:SetPoint("LEFT", label, "RIGHT", 10, 0)
         local slider = CreateFrame("Slider", nil, graphicsPage, "OptionsSliderTemplate")

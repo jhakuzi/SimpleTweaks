@@ -24,3 +24,5 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 - Die Checkboxen im Fenster übernehmen Änderungen sofort.
 - Im **CVar-Browser** kannst du Konsolenbefehle nach Namen oder Beschreibung durchsuchen. Erkennbare CVars zeigen ihren aktuellen Wert und lassen sich per Klick bearbeiten.
 - **Grafik** enthält Regler für `groundEffectDensity`, `groundEffectDist`, `graphicsGroundClutter`, `graphicsViewDistance`, `graphicsLightMode`, `sunshafts` und `shadowNumCascades`.
+
+Die Grafikregler verwenden praktische Wertebereiche. Für `groundEffectDist` ist 600 als allgemeiner Maximalwert dokumentiert, für `graphicsGroundClutter` ist der allgemeine Reglerbereich 0–9 dokumentiert. Diese Grenzen sind nicht eigens im WoW-Forever-Client verifiziert. Auch die übrigen Reglerobergrenzen sind im Client nicht verifiziert; die angezeigten Grenzen sind keine Zusicherung der tatsächlichen Engine-Maxima.
