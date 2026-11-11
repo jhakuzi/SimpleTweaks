@@ -245,16 +245,24 @@ local function CreateOptionsWindow()
     }
     LoadCVars = function()
         wipe(cvarNames)
-        if C_Console and C_Console.GetAllCommands then
-            for _, command in ipairs(C_Console.GetAllCommands()) do
-                local name = command.command or command.name
-                if type(name) == "string" and name ~= "" then
-                    local value = GetCVar(name)
-                    table.insert(cvarNames, {
-                        name = name,
-                        description = command.help or command.helpText or command.description or "",
-                        isCVar = value ~= nil,
-                    })
+        -- WoW Forever exposes the console list as a global function. Retail's
+        -- C_Console namespace is absent in this client.
+        local getCommands = ConsoleGetAllCommands
+        if type(getCommands) == "function" then
+            local ok, commands = pcall(getCommands)
+            if ok and type(commands) == "table" then
+                for _, command in ipairs(commands) do
+                    if type(command) == "table" then
+                        local name = command.command or command.name
+                        if type(name) == "string" and name ~= "" then
+                            local value = GetCVar(name)
+                            table.insert(cvarNames, {
+                                name = name,
+                                description = command.help or command.helpText or command.description or "",
+                                isCVar = value ~= nil,
+                            })
+                        end
+                    end
                 end
             end
         end
