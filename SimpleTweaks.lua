@@ -6,6 +6,9 @@ local DEFAULTS = {
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
 local optionChecks = {}
+local cvarRows = {}
+local cvarNames = {}
+    local graphicsRefreshing = false
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cffd6a45eSimpleTweaks:|r " .. message)
@@ -13,6 +16,17 @@ end
 
 local function IsEnabled(setting)
     return SimpleTweaksDB[setting] ~= false
+end
+
+local function SetCVarChecked(name, value)
+    local ok, err = pcall(SetCVar, name, value)
+    if not ok then return false, tostring(err) end
+    local actual = GetCVar(name)
+    if actual == nil then return false, "CVar nicht verfügbar" end
+    if tostring(actual) ~= tostring(value) then
+        return false, "Wert wurde abgelehnt (aktuell: " .. tostring(actual) .. ")"
+    end
+    return true
 end
 
 local function UpdateMapFade(enable)
@@ -87,7 +101,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(380, 230)
+    window:SetSize(590, 500)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -108,8 +122,38 @@ local function CreateOptionsWindow()
     close:SetPoint("TOPRIGHT", -5, -5)
     close:SetScript("OnClick", function() window:Hide() end)
 
+    local pages = {}
+    local LoadCVars, RefreshGraphics
+    local function NewPage(name)
+        local page = CreateFrame("Frame", nil, window)
+        page:SetPoint("TOPLEFT", 20, -72)
+        page:SetPoint("BOTTOMRIGHT", -20, 20)
+        page:Hide()
+        pages[name] = page
+        return page
+    end
+    local function ShowPage(name)
+        for _, page in pairs(pages) do page:Hide() end
+        pages[name]:Show()
+        if name == "cvars" and LoadCVars then LoadCVars() end
+        if name == "graphics" and RefreshGraphics then RefreshGraphics() end
+    end
+    local function Tab(label, x, page)
+        local button = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        button:SetSize(150, 26)
+        button:SetPoint("TOPLEFT", x, -42)
+        button:SetText(label)
+        button:SetScript("OnClick", function() ShowPage(page) end)
+    end
+    local mainPage = NewPage("main")
+    local cvarPage = NewPage("cvars")
+    local graphicsPage = NewPage("graphics")
+    Tab("Allgemein", 24, "main")
+    Tab("CVar-Suche", 184, "cvars")
+    Tab("Grafik", 344, "graphics")
+
     local function AddOption(key, label, y)
-        local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
+        local check = CreateFrame("CheckButton", nil, mainPage, "UICheckButtonTemplate")
         check:SetPoint("TOPLEFT", 28, y)
         check:SetChecked(IsEnabled(key))
         check.Text:SetText(label)
@@ -119,6 +163,130 @@ local function CreateOptionsWindow()
     end
     AddOption("disableMapFade", "Karte beim Bewegen nicht ausblenden", -68)
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
+
+    local search = CreateFrame("EditBox", nil, cvarPage, "InputBoxTemplate")
+    search:SetSize(300, 26); search:SetPoint("TOPLEFT", 8, -8); search:SetAutoFocus(false)
+    search:SetTextInsets(6, 6, 0, 0)
+    local results = CreateFrame("Frame", nil, cvarPage)
+    results:SetPoint("TOPLEFT", search, "BOTTOMLEFT", 0, -10); results:SetSize(520, 330)
+    local scroll = CreateFrame("ScrollFrame", nil, results, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT"); scroll:SetPoint("BOTTOMRIGHT", -26, 0)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(490, 1); scroll:SetScrollChild(content)
+    local resultHint = results:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    resultHint:SetPoint("TOPLEFT", 4, -4)
+    local function IsCVarCommand(command)
+        local cvarType = Enum and Enum.ConsoleCommandType and Enum.ConsoleCommandType.Cvar
+        return cvarType and (command.commandType == cvarType or command.type == cvarType)
+    end
+    local function RefreshCVarSearch()
+        for _, row in ipairs(cvarRows) do row:Hide() end
+        local query = (search:GetText() or ""):lower()
+        local y, shown = 0, 0
+        for _, name in ipairs(cvarNames) do
+            if query == "" or name:lower():find(query, 1, true) then
+                shown = shown + 1
+                local row = cvarRows[shown]
+                if not row then
+                    row = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+                    row:SetSize(460, 24)
+                    row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    row.value:SetPoint("RIGHT", -8, 0)
+                    cvarRows[shown] = row
+                end
+                row:SetPoint("TOPLEFT", 0, -y); row:SetText(name)
+                row.value:SetText(tostring(GetCVar(name) or ""))
+                    row:SetScript("OnClick", function()
+                    local cvarName = name
+                    local current = tostring(GetCVar(cvarName) or "")
+                    StaticPopup_Show("SIMPLETWEAKS_CVAR", cvarName, current, { name = cvarName, current = current })
+                end)
+                row:Show(); y = y + 27
+            end
+        end
+        content:SetHeight(math.max(y, 1))
+        resultHint:SetText(shown == 0 and (query == "" and "Keine CVars verfügbar." or "Keine Treffer.") or "")
+    end
+    search:SetScript("OnTextChanged", RefreshCVarSearch)
+    StaticPopupDialogs.SIMPLETWEAKS_CVAR = {
+        text = "Wert für %s eingeben (aktuell: %s)", button1 = ACCEPT, button2 = CANCEL,
+        hasEditBox = true, whileDead = true, hideOnEscape = true,
+        OnShow = function(self, data)
+            local popupData = data or self.data
+            self.data = popupData
+            self.editBox:SetText(popupData and popupData.current or "")
+            self.editBox:HighlightText()
+        end,
+        OnAccept = function(self)
+            local data, value = self.data, self.editBox:GetText()
+            if data and data.name and value ~= "" then
+                local ok, err = SetCVarChecked(data.name, value)
+                if not ok then Print("CVar " .. data.name .. ": " .. err) end
+            end
+            RefreshCVarSearch()
+        end,
+        EditBoxOnEnterPressed = function(self) self:GetParent().button1:Click() end,
+    }
+    LoadCVars = function()
+        wipe(cvarNames)
+        if C_Console and C_Console.GetAllCommands then
+            for _, command in ipairs(C_Console.GetAllCommands()) do
+                local name = command.command or command.name
+                if name and IsCVarCommand(command) and GetCVar(name) ~= nil then table.insert(cvarNames, name) end
+            end
+        end
+        table.sort(cvarNames)
+        RefreshCVarSearch()
+    end
+
+    local settings = {
+        {"groundEffectDensity", "Grasdichte", 0, 256, 256},
+        {"groundEffectDist", "Sichtweite für Gras", 0, 500, 500},
+        {"graphicsGroundClutter", "Bodendetails", 0, 9, 9},
+        {"graphicsViewDistance", "Sichtweite", 1, 9, 9},
+        {"graphicsLightMode", "Sekundäre Beleuchtung", 0, 3, 3},
+        {"sunshafts", "Sonnenstrahlen", 0, 2, 2},
+        {"shadowNumCascades", "Detaillierte Fernschatten", 0, 4, 4},
+    }
+    for index, info in ipairs(settings) do
+        local settingInfo = info
+        local label = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        label:SetPoint("TOPLEFT", 8, -8 - (index - 1) * 52); label:SetText(info[2])
+        local current = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        current:SetPoint("LEFT", label, "RIGHT", 10, 0)
+        local slider = CreateFrame("Slider", nil, graphicsPage, "OptionsSliderTemplate")
+        slider:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4); slider:SetWidth(400)
+        slider:SetMinMaxValues(settingInfo[3], settingInfo[4]); slider:SetValueStep(1); slider:SetObeyStepOnDrag(true)
+        slider.Low:SetText(tostring(settingInfo[3])); slider.High:SetText(tostring(settingInfo[4]))
+        local available = GetCVar(settingInfo[1]) ~= nil
+        slider:SetEnabled(available)
+        slider:SetScript("OnValueChanged", function(self, value)
+            if graphicsRefreshing then return end
+            local rounded = math.floor(value + 0.5)
+            local ok, err = SetCVarChecked(settingInfo[1], tostring(rounded))
+            if not ok then Print(settingInfo[1] .. ": " .. err); RefreshGraphics() end
+            current:SetText(tostring(GetCVar(settingInfo[1]) or "Nicht verfügbar"))
+        end)
+        slider.cvarName, slider.minValue = settingInfo[1], settingInfo[3]
+        slider.currentText, slider.label = current, label
+        if not available then label:SetText(info[2] .. " (nicht verfügbar)") end
+    end
+    RefreshGraphics = function()
+        graphicsRefreshing = true
+        for _, child in ipairs({ graphicsPage:GetChildren() }) do
+            if child.cvarName then
+                local value = GetCVar(child.cvarName)
+                local number = tonumber(value)
+                child:SetEnabled(value ~= nil)
+                child.currentText:SetText(value and ("Aktuell: " .. tostring(value)) or "Nicht verfügbar")
+                if value then child:SetValue(number or child.minValue) end
+                child.label:SetText(child.label:GetText():gsub(" %(nicht verfügbar%)$", ""))
+                if not value then child.label:SetText(child.label:GetText() .. " (nicht verfügbar)") end
+            end
+        end
+        graphicsRefreshing = false
+    end
+    ShowPage("main")
     return window
 end
 

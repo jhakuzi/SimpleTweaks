@@ -1,9 +1,11 @@
 # SimpleTweaks
 
-Ein kleines Addon für World of Warcraft: Forever mit zwei unabhängig schaltbaren Funktionen:
+Ein kleines Addon für World of Warcraft: Forever mit einem bronzefarbenen Einstellungsfenster. Es bietet:
 
 - Die Weltkarte beim Bewegen sichtbar halten.
 - Makronamen auf den Blizzard-Aktionsleisten ausblenden.
+- Eine durchsuchbare Liste verfügbarer CVars, deren Werte sich im Fenster bearbeiten lassen.
+- Eine Grafikseite mit Reglern für Gras, Sichtweite, Beleuchtung, Sonnenstrahlen und Schatten.
 
 Beide Funktionen sind standardmäßig aktiv und werden gespeichert.
 
@@ -20,3 +22,5 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 - `/st karte an|aus` schaltet das Ausblenden der Karte um.
 - `/st makros an|aus` schaltet das Ausblenden der Makronamen um.
 - Die Checkboxen im Fenster übernehmen Änderungen sofort.
+- Auf **CVar-Suche** kannst du verfügbare CVars suchen und per Klick ihren Wert bearbeiten.
+- **Grafik** enthält Regler für `groundEffectDensity`, `groundEffectDist`, `graphicsGroundClutter`, `graphicsViewDistance`, `graphicsLightMode`, `sunshafts` und `shadowNumCascades`.
