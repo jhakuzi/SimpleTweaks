@@ -190,16 +190,13 @@ local function CreateOptionsWindow()
     content:SetSize(490, 1); scroll:SetScrollChild(content)
     local resultHint = results:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     resultHint:SetPoint("TOPLEFT", 4, -4)
-    local function IsCVarCommand(command)
-        local cvarType = Enum and Enum.ConsoleCommandType and Enum.ConsoleCommandType.Cvar
-        return cvarType and (command.commandType == cvarType or command.type == cvarType)
-    end
     local function RefreshCVarSearch()
         for _, row in ipairs(cvarRows) do row:Hide() end
         local query = (search:GetText() or ""):lower()
         local y, shown = 0, 0
-        for _, name in ipairs(cvarNames) do
-            if query == "" or name:lower():find(query, 1, true) then
+        for _, item in ipairs(cvarNames) do
+            local name = item.name
+            if query == "" or name:lower():find(query, 1, true) or (item.description and item.description:lower():find(query, 1, true)) then
                 shown = shown + 1
                 local row = cvarRows[shown]
                 if not row then
@@ -207,12 +204,16 @@ local function CreateOptionsWindow()
                     row:SetSize(460, 24)
                     row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
                     row.value:SetPoint("RIGHT", -8, 0)
+                    row.value:SetJustifyH("RIGHT")
                     cvarRows[shown] = row
                 end
-                row:SetPoint("TOPLEFT", 0, -y); row:SetText(name)
-                row.value:SetText(tostring(GetCVar(name) or ""))
-                    row:SetScript("OnClick", function()
-                    local cvarName = name
+                row:SetPoint("TOPLEFT", 0, -y)
+                row:SetText(name .. (item.isCVar and "  |cffb18a5a[CVar]|r" or ""))
+                row.value:SetText(item.isCVar and tostring(GetCVar(name) or "") or "")
+                row:SetEnabled(item.isCVar)
+                row:SetScript("OnClick", function()
+                    if not item.isCVar then return end
+                    local cvarName = item.name
                     local current = tostring(GetCVar(cvarName) or "")
                     StaticPopup_Show("SIMPLETWEAKS_CVAR", cvarName, current, { name = cvarName, current = current })
                 end)
@@ -247,10 +248,17 @@ local function CreateOptionsWindow()
         if C_Console and C_Console.GetAllCommands then
             for _, command in ipairs(C_Console.GetAllCommands()) do
                 local name = command.command or command.name
-                if name and IsCVarCommand(command) and GetCVar(name) ~= nil then table.insert(cvarNames, name) end
+                if type(name) == "string" and name ~= "" then
+                    local value = GetCVar(name)
+                    table.insert(cvarNames, {
+                        name = name,
+                        description = command.help or command.helpText or command.description or "",
+                        isCVar = value ~= nil,
+                    })
+                end
             end
         end
-        table.sort(cvarNames)
+        table.sort(cvarNames, function(a, b) return a.name:lower() < b.name:lower() end)
         RefreshCVarSearch()
     end
 

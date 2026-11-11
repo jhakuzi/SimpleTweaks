@@ -4,7 +4,7 @@ Ein kleines Addon für World of Warcraft: Forever mit einem bronzefarbenen Einst
 
 - Die Weltkarte beim Bewegen sichtbar halten.
 - Makronamen auf den Blizzard-Aktionsleisten ausblenden.
-- Eine durchsuchbare Liste verfügbarer CVars, deren Werte sich im Fenster bearbeiten lassen.
+- Eine durchsuchbare Liste der vom Client gemeldeten Konsolenbefehle; CVar-Einträge lassen sich anklicken und bearbeiten.
 - Eine Grafikseite mit Reglern für Gras, Sichtweite, Beleuchtung, Sonnenstrahlen und Schatten.
 
 Beide Funktionen sind standardmäßig aktiv und werden gespeichert.
@@ -22,5 +22,5 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 - `/tweaks karte an|aus` schaltet das Ausblenden der Karte um.
 - `/tweaks makros an|aus` schaltet das Ausblenden der Makronamen um.
 - Die Checkboxen im Fenster übernehmen Änderungen sofort.
-- Auf **CVar-Suche** kannst du verfügbare CVars suchen und per Klick ihren Wert bearbeiten.
+- Im **CVar-Browser** kannst du Konsolenbefehle nach Namen oder Beschreibung durchsuchen. Erkennbare CVars zeigen ihren aktuellen Wert und lassen sich per Klick bearbeiten.
 - **Grafik** enthält Regler für `groundEffectDensity`, `groundEffectDist`, `graphicsGroundClutter`, `graphicsViewDistance`, `graphicsLightMode`, `sunshafts` und `shadowNumCascades`.
