@@ -101,7 +101,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(590, 500)
+    window:SetSize(720, 520)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -123,10 +123,11 @@ local function CreateOptionsWindow()
     close:SetScript("OnClick", function() window:Hide() end)
 
     local pages = {}
+    local navButtons = {}
     local LoadCVars, RefreshGraphics
     local function NewPage(name)
         local page = CreateFrame("Frame", nil, window)
-        page:SetPoint("TOPLEFT", 20, -72)
+        page:SetPoint("TOPLEFT", 188, -66)
         page:SetPoint("BOTTOMRIGHT", -20, 20)
         page:Hide()
         pages[name] = page
@@ -135,22 +136,36 @@ local function CreateOptionsWindow()
     local function ShowPage(name)
         for _, page in pairs(pages) do page:Hide() end
         pages[name]:Show()
+        for buttonName, button in pairs(navButtons) do
+            button:SetEnabled(buttonName ~= name)
+        end
         if name == "cvars" and LoadCVars then LoadCVars() end
         if name == "graphics" and RefreshGraphics then RefreshGraphics() end
     end
-    local function Tab(label, x, page)
+    local sidebar = CreateFrame("Frame", nil, window, "BackdropTemplate")
+    sidebar:SetPoint("TOPLEFT", 16, -62)
+    sidebar:SetPoint("BOTTOMLEFT", 16, 18)
+    sidebar:SetWidth(154)
+    sidebar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    sidebar:SetBackdropColor(0.035, 0.025, 0.018, 0.95)
+    sidebar:SetBackdropBorderColor(0.52, 0.3, 0.12, 1)
+    local sidebarTitle = sidebar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sidebarTitle:SetPoint("TOPLEFT", 12, -12)
+    sidebarTitle:SetText("|cffffd27fKategorien|r")
+    local function SidebarButton(label, y, page)
         local button = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
-        button:SetSize(150, 26)
-        button:SetPoint("TOPLEFT", x, -42)
+        button:SetSize(138, 32)
+        button:SetPoint("TOPLEFT", sidebar, 8, y)
         button:SetText(label)
         button:SetScript("OnClick", function() ShowPage(page) end)
+        navButtons[page] = button
     end
     local mainPage = NewPage("main")
     local cvarPage = NewPage("cvars")
     local graphicsPage = NewPage("graphics")
-    Tab("Allgemein", 24, "main")
-    Tab("CVar-Suche", 184, "cvars")
-    Tab("Grafik", 344, "graphics")
+    SidebarButton("Allgemein", -42, "main")
+    SidebarButton("CVar-Browser", -82, "cvars")
+    SidebarButton("Grafik", -122, "graphics")
 
     local function AddOption(key, label, y)
         local check = CreateFrame("CheckButton", nil, mainPage, "UICheckButtonTemplate")
