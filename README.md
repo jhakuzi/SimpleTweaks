@@ -17,10 +17,10 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 
 ## Use
 
-Öffne das Einstellungsfenster über das Addon-Kompartiment oben rechts oder mit `/st` beziehungsweise `/simpletweaks`.
+Öffne das Einstellungsfenster über das Addon-Kompartiment oben rechts oder mit `/tweaks`.
 
-- `/st karte an|aus` schaltet das Ausblenden der Karte um.
-- `/st makros an|aus` schaltet das Ausblenden der Makronamen um.
+- `/tweaks karte an|aus` schaltet das Ausblenden der Karte um.
+- `/tweaks makros an|aus` schaltet das Ausblenden der Makronamen um.
 - Die Checkboxen im Fenster übernehmen Änderungen sofort.
 - Auf **CVar-Suche** kannst du verfügbare CVars suchen und per Klick ihren Wert bearbeiten.
 - **Grafik** enthält Regler für `groundEffectDensity`, `groundEffectDist`, `graphicsGroundClutter`, `graphicsViewDistance`, `graphicsLightMode`, `sunshafts` und `shadowNumCascades`.

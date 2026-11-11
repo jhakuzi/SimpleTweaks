@@ -318,28 +318,26 @@ local function HandleSlashCommand(message)
         if value == "on" or value == "off" then
             SetOption("disableMapFade", value == "on")
         else
-            Print("Karte nicht ausblenden: " .. (IsEnabled("disableMapFade") and "an" or "aus") .. ". /st karte an|aus")
+            Print("Karte nicht ausblenden: " .. (IsEnabled("disableMapFade") and "an" or "aus") .. ". /tweaks karte an|aus")
         end
     elseif feature == "macros" or feature == "macro" then
         if value == "on" or value == "off" then
             SetOption("hideMacroNames", value == "on")
         else
-            Print("Makronamen ausblenden: " .. (IsEnabled("hideMacroNames") and "an" or "aus") .. ". /st makros an|aus")
+            Print("Makronamen ausblenden: " .. (IsEnabled("hideMacroNames") and "an" or "aus") .. ". /tweaks makros an|aus")
         end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
-            if value == "an" or value == "aus" then SetOption("disableMapFade", value == "an") else Print("Verwendung: /st karte an|aus") end
+            if value == "an" or value == "aus" then SetOption("disableMapFade", value == "an") else Print("Verwendung: /tweaks karte an|aus") end
         elseif feature == "makros" then
-            if value == "an" or value == "aus" then SetOption("hideMacroNames", value == "an") else Print("Verwendung: /st makros an|aus") end
+            if value == "an" or value == "aus" then SetOption("hideMacroNames", value == "an") else Print("Verwendung: /tweaks makros an|aus") end
         else OpenOptions() end
     else
         OpenOptions()
     end
 end
 
-SLASH_SIMPLETWEAKS1 = "/simpletweaks"
-SLASH_SIMPLETWEAKS2 = "/st"
-SLASH_SIMPLETWEAKS3 = "/simple"
+SLASH_SIMPLETWEAKS1 = "/tweaks"
 SlashCmdList.SIMPLETWEAKS = HandleSlashCommand
 
 local frame = CreateFrame("Frame")
@@ -364,6 +362,6 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
         AddonCompartmentFrame:RegisterAddon({ text = "SimpleTweaks", icon = "Interface\\Icons\\INV_Misc_Gear_01", notCheckable = true, func = OpenOptions })
     end
-    Print("Geladen. /st öffnet die Einstellungen.")
+    Print("Geladen. /tweaks öffnet die Einstellungen.")
     frame:UnregisterEvent("ADDON_LOADED")
 end)
