@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: SimpleTweaks
+## Notes: Small quality-of-life tweaks for World of Warcraft: Forever.
+## Author: SimpleTweaks
+## Version: 1.0.0
+## SavedVariables: SimpleTweaksDB
+
+SimpleTweaks.lua
