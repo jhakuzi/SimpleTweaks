@@ -125,7 +125,7 @@ end
 
 local circleBorder
 local circleFill
-local circlePie
+local pieHolder
 local pieStamp
 local sampleStart
 local editCallbacks = false
@@ -156,27 +156,62 @@ local function IgnoreMouse(frame)
     end
 end
 
-local function ApplySwipeColor(pie, r, g, b, a)
-    a = a or 1
-    if CreateColor then
-        local color = CreateColor(r, g, b, a)
-        if pcall(pie.SetSwipeColor, pie, color) then
-            return
-        end
-        if pcall(pie.SetSwipeColor, pie, color, a) then
-            return
-        end
+local WEDGE_UL = UPPER_LEFT_VERTEX or 1
+local WEDGE_LL = LOWER_LEFT_VERTEX or 2
+local WEDGE_UR = UPPER_RIGHT_VERTEX or 3
+local WEDGE_LR = LOWER_RIGHT_VERTEX or 4
+local wedgeTextures
+local fullDisc
+local sparkDot
+
+local EXACT_ANGLE = {
+    [0] = { 0.5, 0 },
+    [45] = { 1, 0 },
+    [90] = { 1, 0.5 },
+    [135] = { 1, 1 },
+    [180] = { 0.5, 1 },
+    [225] = { 0, 1 },
+    [270] = { 0, 0.5 },
+    [315] = { 0, 0 },
+}
+local POINT_ORDER = { "LL", "UL", "UR", "LR", "LL", "UL", "UR", "LR", "LL", "UL", "UR", "LR" }
+local DEFAULT_COORD = {
+    ULx = 0, ULy = 0,
+    LLx = 0, LLy = 1,
+    URx = 1, URy = 0,
+    LRx = 1, LRy = 1,
+}
+local VERTEX = { UL = WEDGE_UL, LL = WEDGE_LL, UR = WEDGE_UR, LR = WEDGE_LR }
+
+local function TanDeg(angle)
+    return math.tan(math.rad(angle))
+end
+
+local function AngleToCoord(angle)
+    angle = angle % 360
+    if angle % 45 == 0 then
+        local pair = EXACT_ANGLE[angle]
+        return pair[1], pair[2]
     end
-    if pie.SetSwipeColorRGBA and pcall(pie.SetSwipeColorRGBA, pie, r, g, b, a) then
-        return
+    if angle < 45 then
+        return 0.5 + TanDeg(angle) / 2, 0
+    elseif angle < 135 then
+        return 1, 0.5 + TanDeg(angle - 90) / 2
+    elseif angle < 225 then
+        return 0.5 - TanDeg(angle) / 2, 1
+    elseif angle < 315 then
+        return 0, 0.5 - TanDeg(angle - 90) / 2
     end
-    pcall(pie.SetSwipeColor, pie, r, g, b, a)
+    return 0.5 + TanDeg(angle) / 2, 0
 end
 
 local function EnsureCircle()
     if circleBorder then
         return
     end
+    pieHolder = CreateFrame("Frame", nil, display)
+    pieHolder:EnableMouse(false)
+
     circleBorder = display:CreateTexture(nil, "BACKGROUND", nil, 0)
     circleBorder:SetTexture("Interface\\Buttons\\WHITE8X8")
     AddCircleMask(display, circleBorder)
@@ -187,72 +222,32 @@ local function EnsureCircle()
     AddCircleMask(display, circleFill)
     circleFill:Hide()
 
-    local pie
-    local ok, created = pcall(CreateFrame, "Cooldown", nil, display, "CooldownFrameTemplate")
-    if ok and created then
-        pie = created
-    else
-        pie = CreateFrame("Cooldown", nil, display)
-    end
-    circlePie = pie
-    pie.noCooldownCount = true
-    IgnoreMouse(pie)
-    if pie.SetDrawBling then
-        pcall(pie.SetDrawBling, pie, false)
-    end
-    if pie.SetHideCountdownNumbers then
-        pcall(pie.SetHideCountdownNumbers, pie, true)
-    end
-    if pie.SetDrawSwipe then
-        pcall(pie.SetDrawSwipe, pie, true)
-    end
-    if pie.SetUseCircularEdge then
-        pcall(pie.SetUseCircularEdge, pie, true)
-    end
-    -- A Cooldown built in Lua has no swipe texture. Without one, SetSwipeColor
-    -- does nothing and the circle just sits there. WeakAuras sets both.
-    if pie.SetSwipeTexture then
-        pcall(pie.SetSwipeTexture, pie, "Interface\\Buttons\\WHITE8X8")
-    end
-    pie:Hide()
-end
+    fullDisc = pieHolder:CreateTexture(nil, "ARTWORK", nil, 0)
+    fullDisc:SetAllPoints()
+    fullDisc:SetTexture("Interface\\Buttons\\WHITE8X8")
+    AddCircleMask(pieHolder, fullDisc)
+    fullDisc:Hide()
 
-local function ClipSwipe()
-    if not circlePie or not circlePie.CreateMaskTexture then
-        return
-    end
-    if not circlePie.stMask then
-        local mask = circlePie:CreateMaskTexture()
-        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        mask:SetAllPoints(circlePie)
-        circlePie.stMask = mask
-    end
-    local mask = circlePie.stMask
-    local function ClipRegion(region)
-        if not region or region.stCircle or type(region.AddMaskTexture) ~= "function" then
-            return
+    wedgeTextures = {}
+    for i = 1, 3 do
+        local tex = pieHolder:CreateTexture(nil, "ARTWORK", nil, i)
+        tex:SetAllPoints()
+        tex:SetTexture("Interface\\Buttons\\WHITE8X8")
+        if tex.SetSnapToPixelGrid then
+            tex:SetSnapToPixelGrid(false)
         end
-        if region.GetObjectType and region:GetObjectType() ~= "Texture" then
-            return
+        if tex.SetTexelSnappingBias then
+            tex:SetTexelSnappingBias(0)
         end
-        if pcall(region.AddMaskTexture, region, mask) then
-            region.stCircle = true
-        end
+        AddCircleMask(pieHolder, tex)
+        tex:Hide()
+        wedgeTextures[i] = tex
     end
-    if circlePie.GetRegions then
-        for _, region in ipairs({ circlePie:GetRegions() }) do
-            ClipRegion(region)
-        end
-    end
-    if circlePie.GetChildren then
-        for _, child in ipairs({ circlePie:GetChildren() }) do
-            if child.GetRegions then
-                for _, region in ipairs({ child:GetRegions() }) do
-                    ClipRegion(region)
-                end
-            end
-        end
-    end
+
+    sparkDot = pieHolder:CreateTexture(nil, "OVERLAY", nil, 7)
+    sparkDot:SetTexture("Interface\\Buttons\\WHITE8X8")
+    AddCircleMask(pieHolder, sparkDot)
+    sparkDot:Hide()
 end
 
 local function ApplyCircleGeometry()
@@ -267,44 +262,43 @@ local function ApplyCircleGeometry()
         height = size + 22
     end
     display:SetSize(width, height)
+    pieHolder:ClearAllPoints()
+    pieHolder:SetSize(inner, inner)
+    if editing then
+        pieHolder:SetPoint("TOP", display, "TOP", 0, -(size - inner) / 2)
+    else
+        pieHolder:SetPoint("CENTER", display, "CENTER", 0, 0)
+    end
     circleBorder:ClearAllPoints()
     circleBorder:SetSize(size, size)
+    circleBorder:SetPoint("CENTER", pieHolder, "CENTER", 0, 0)
+    circleFill:ClearAllPoints()
+    circleFill:SetSize(inner, inner)
+    circleFill:SetPoint("CENTER", pieHolder, "CENTER", 0, 0)
+    sparkDot:SetSize(math.max(2, math.floor(inner * 0.16 + 0.5)), math.max(2, math.floor(inner * 0.16 + 0.5)))
     if editing then
-        circleBorder:SetPoint("TOP", display, "TOP", 0, 0)
         editLabel:ClearAllPoints()
         editLabel:SetPoint("TOP", circleBorder, "BOTTOM", 0, -2)
         editLabel:Show()
     else
-        circleBorder:SetPoint("CENTER")
         editLabel:Hide()
-    end
-    circleFill:ClearAllPoints()
-    circleFill:SetSize(inner, inner)
-    circleFill:SetPoint("CENTER", circleBorder, "CENTER")
-    if circlePie then
-        circlePie:ClearAllPoints()
-        circlePie:SetSize(inner, inner)
-        if editing then
-            circlePie:SetPoint("TOP", display, "TOP", 0, -(size - inner) / 2)
-        else
-            circlePie:SetPoint("CENTER", display, "CENTER", 0, 0)
-        end
-        if circlePie.SetEdgeScale then
-            local scale = inner / 28
-            if SparkOn() then
-                scale = scale * 1.35
-            end
-            if scale < 0.4 then
-                scale = 0.4
-            elseif scale > 1.8 then
-                scale = 1.8
-            end
-            pcall(circlePie.SetEdgeScale, circlePie, scale)
-        end
-        circlePie:SetFrameLevel(display:GetFrameLevel() + 4)
     end
     if selection and selection.SetFrameLevel then
         selection:SetFrameLevel(display:GetFrameLevel() + 8)
+    end
+end
+
+local function HideWedges()
+    if wedgeTextures then
+        for i = 1, 3 do
+            wedgeTextures[i]:Hide()
+        end
+    end
+    if fullDisc then
+        fullDisc:Hide()
+    end
+    if sparkDot then
+        sparkDot:Hide()
     end
 end
 
@@ -315,13 +309,91 @@ local function HideCircle()
     if circleFill then
         circleFill:Hide()
     end
-    if circlePie then
-        circlePie:Hide()
-        if circlePie.Clear then
-            pcall(circlePie.Clear, circlePie)
+    HideWedges()
+    if pieHolder then
+        pieHolder:Hide()
+    end
+end
+
+local function PaintWedge(tex, size, angle1, angle2)
+    local index = math.floor((angle1 + 45) / 90)
+    local middle = POINT_ORDER[index + 1]
+    local startCorner = POINT_ORDER[index + 2]
+    local endCorner1 = POINT_ORDER[index + 3]
+    local endCorner2 = POINT_ORDER[index + 4]
+    local coord = {}
+    local function Move(corner, x, y)
+        local rx = DEFAULT_COORD[corner .. "x"] - x
+        local ry = DEFAULT_COORD[corner .. "y"] - y
+        coord[corner .. "x"] = x
+        coord[corner .. "y"] = y
+        coord[corner .. "vx"] = -rx * size
+        coord[corner .. "vy"] = ry * size
+    end
+    Move(middle, 0.5, 0.5)
+    local sx, sy = AngleToCoord(angle1)
+    Move(startCorner, sx, sy)
+    local edge1 = math.floor((angle1 - 45) / 90)
+    local edge2 = math.floor((angle2 - 45) / 90)
+    if edge1 == edge2 then
+        local ex, ey = AngleToCoord(angle2)
+        Move(endCorner1, ex, ey)
+    else
+        Move(endCorner1, DEFAULT_COORD[endCorner1 .. "x"], DEFAULT_COORD[endCorner1 .. "y"])
+    end
+    local ex, ey = AngleToCoord(angle2)
+    Move(endCorner2, ex, ey)
+    tex:SetVertexOffset(VERTEX.UR, coord.URvx or 0, coord.URvy or 0)
+    tex:SetVertexOffset(VERTEX.UL, coord.ULvx or 0, coord.ULvy or 0)
+    tex:SetVertexOffset(VERTEX.LR, coord.LRvx or 0, coord.LRvy or 0)
+    tex:SetVertexOffset(VERTEX.LL, coord.LLvx or 0, coord.LLvy or 0)
+    tex:SetTexCoord(coord.ULx, coord.ULy, coord.LLx, coord.LLy, coord.URx, coord.URy, coord.LRx, coord.LRy)
+end
+
+local function PlaceSpark(shownAngle)
+    if not SparkOn() then
+        sparkDot:Hide()
+        return
+    end
+    local radius = pieHolder:GetWidth() / 2
+    local theta = math.rad(shownAngle)
+    sparkDot:ClearAllPoints()
+    sparkDot:SetPoint("CENTER", pieHolder, "CENTER", math.sin(theta) * radius, math.cos(theta) * radius)
+    sparkDot:Show()
+end
+
+local function ShowSweep(angle1, angle2, r, g, b, alpha)
+    local index1 = math.floor((angle1 + 45) / 90)
+    local index2 = math.floor((angle2 + 45) / 90)
+    local spans = {}
+    if index1 + 1 >= index2 then
+        spans[1] = { angle1, angle2 }
+    elseif index1 + 3 >= index2 then
+        local mid = (index1 + 1) * 90 + 45
+        spans[1] = { angle1, mid }
+        spans[2] = { mid, angle2 }
+    else
+        local mid = (index1 + 1) * 90 + 45
+        spans[1] = { angle1, mid }
+        spans[2] = { mid, mid + 180 }
+        spans[3] = { mid + 180, angle2 }
+    end
+    local size = pieHolder:GetWidth()
+    for i = 1, 3 do
+        local tex = wedgeTextures[i]
+        local span = spans[i]
+        if span then
+            tex:SetVertexColor(r, g, b, alpha)
+            local ok = pcall(PaintWedge, tex, size, span[1], span[2])
+            if ok then
+                tex:Show()
+            else
+                tex:Hide()
+            end
+        else
+            tex:Hide()
         end
     end
-    pieStamp = nil
 end
 
 local function ShowCircle(startTime, duration, progress)
@@ -335,41 +407,31 @@ local function ShowCircle(startTime, duration, progress)
     end
     local r, g, b = CircleColor()
     local br, bg, bb = BorderColor()
+    local alpha = 0.5 + 0.5 * progress
+    local grow = PieFills()
+    local shown = grow and progress or (1 - progress)
     circleBorder:SetColorTexture(br, bg, bb, 1)
     circleBorder:Show()
     circleFill:SetColorTexture(0.02, 0.02, 0.02, 0.82)
     circleFill:Show()
-    if not circlePie or not PlainNumber(startTime) or not PlainNumber(duration) or duration <= 0 then
+    pieHolder:Show()
+    HideWedges()
+    if shown >= 0.995 then
+        fullDisc:SetVertexColor(r, g, b, alpha)
+        fullDisc:Show()
         return
     end
-    local alpha = 0.5 + 0.5 * progress
-    local grow = PieFills()
-    circlePie:Show()
-    if circlePie.SetDrawSwipe then
-        circlePie:SetDrawSwipe(true)
+    if shown <= 0.002 then
+        return
     end
-    if circlePie.SetDrawBling then
-        circlePie:SetDrawBling(false)
+    local angle1, angle2, lead
+    if grow then
+        angle1, angle2, lead = 0, shown * 360, shown * 360
+    else
+        angle1, angle2, lead = (1 - shown) * 360, 360, (1 - shown) * 360
     end
-    if circlePie.SetDrawEdge then
-        circlePie:SetDrawEdge(true)
-    end
-    local stamp = math.floor(startTime * 20) .. ":" .. math.floor(duration * 20) .. ":" .. (grow and "1" or "0")
-    if pieStamp ~= stamp then
-        pieStamp = stamp
-        if circlePie.SetReverse then
-            circlePie:SetReverse(grow)
-        end
-        pcall(circlePie.SetCooldown, circlePie, startTime, duration)
-    end
-    if circlePie.SetDrawSwipe then
-        circlePie:SetDrawSwipe(true)
-    end
-    if circlePie.SetDrawEdge then
-        circlePie:SetDrawEdge(true)
-    end
-    ApplySwipeColor(circlePie, r, g, b, alpha)
-    ClipSwipe()
+    ShowSweep(angle1, angle2, r, g, b, alpha)
+    PlaceSpark(lead)
 end
 
 local function FontSize()
