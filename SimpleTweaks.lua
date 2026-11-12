@@ -92,6 +92,16 @@ local function RefreshMacroNames()
     end
 end
 
+local function HookFutureMacroButtons()
+    local mixins = { ActionBarActionButtonMixin, ActionButtonMixin }
+    for _, mixin in ipairs(mixins) do
+        if type(mixin) == "table" and type(mixin.Update) == "function" and not mixin.simpleTweaksMacroHook then
+            hooksecurefunc(mixin, "Update", UpdateMacroName)
+            mixin.simpleTweaksMacroHook = true
+        end
+    end
+end
+
 local function SetIndicatorColor(entry, color)
     local indicator = entry.indicator
     if color then
@@ -637,6 +647,10 @@ frame:RegisterEvent("ADDON_LOADED")
 pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_ADDED")
 pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_REMOVED")
 pcall(frame.RegisterEvent, frame, "PLAYER_TARGET_CHANGED")
+pcall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
+pcall(frame.RegisterEvent, frame, "ACTIONBAR_SLOT_CHANGED")
+pcall(frame.RegisterEvent, frame, "UPDATE_BONUS_ACTIONBAR")
+pcall(frame.RegisterEvent, frame, "ACTIONBAR_PAGE_CHANGED")
 frame:SetScript("OnEvent", function(_, event, loadedAddon)
     if event == "NAME_PLATE_UNIT_ADDED" then
         activeNameplateUnits[loadedAddon] = true
@@ -652,6 +666,10 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         return
     elseif event == "PLAYER_TARGET_CHANGED" then
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
+        return
+    elseif event == "PLAYER_ENTERING_WORLD" or event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "ACTIONBAR_PAGE_CHANGED" then
+        HookFutureMacroButtons()
+        RefreshMacroNames()
         return
     end
     if event ~= "ADDON_LOADED" or loadedAddon ~= addonName then
@@ -674,6 +692,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     end
 
     RefreshMacroNames()
+    HookFutureMacroButtons()
     if SimpleTweaksSwing and SimpleTweaksSwing.Init then
         SimpleTweaksSwing.Init()
     end

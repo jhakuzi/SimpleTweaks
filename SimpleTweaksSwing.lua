@@ -163,6 +163,9 @@ local WEDGE_LR = LOWER_RIGHT_VERTEX or 4
 local wedgeTextures
 local fullDisc
 local sparkDot
+local pieLines
+local edgeLine
+local PIE_SLICES = 48
 
 local EXACT_ANGLE = {
     [0] = { 0.5, 0 },
@@ -248,6 +251,17 @@ local function EnsureCircle()
     sparkDot:SetTexture("Interface\\Buttons\\WHITE8X8")
     AddCircleMask(pieHolder, sparkDot)
     sparkDot:Hide()
+
+    pieLines = {}
+    if pieHolder.CreateLine then
+        for i = 1, PIE_SLICES do
+            local line = pieHolder:CreateLine(nil, "OVERLAY")
+            line:Hide()
+            pieLines[i] = line
+        end
+        edgeLine = pieHolder:CreateLine(nil, "OVERLAY", nil, 7)
+        edgeLine:Hide()
+    end
 end
 
 local function ApplyCircleGeometry()
@@ -299,6 +313,14 @@ local function HideWedges()
     end
     if sparkDot then
         sparkDot:Hide()
+    end
+    if pieLines then
+        for i = 1, #pieLines do
+            pieLines[i]:Hide()
+        end
+    end
+    if edgeLine then
+        edgeLine:Hide()
     end
 end
 
@@ -396,6 +418,52 @@ local function ShowSweep(angle1, angle2, r, g, b, alpha)
     end
 end
 
+local function UpdatePie(progress)
+    if not pieLines or not pieLines[1] then
+        return false
+    end
+    HideWedges()
+    local size = CircleSize()
+    local band = math.max(1, math.floor(size / 9 + 0.5))
+    local radius = math.max(1, (size - band * 2) / 2 - 0.25)
+    local slice = math.max(1.25, (radius * 2 * math.pi / PIE_SLICES) + 0.75)
+    local alpha = 0.5 + 0.5 * progress
+    local r, g, b = CircleColor()
+    local grow = PieFills()
+    local shown = grow and progress or (1 - progress)
+    if shown < 0 then
+        shown = 0
+    elseif shown > 1 then
+        shown = 1
+    end
+    local count = math.floor(shown * PIE_SLICES + 0.001)
+    local lead = (grow and shown or progress) * math.pi * 2
+    for i = 1, PIE_SLICES do
+        local line = pieLines[i]
+        local visible = grow and i <= count or (not grow and i > PIE_SLICES - count)
+        if not visible then
+            line:Hide()
+        else
+            local angle = ((i - 0.5) / PIE_SLICES) * math.pi * 2
+            line:SetThickness(slice)
+            line:SetColorTexture(r, g, b, alpha)
+            line:SetStartPoint("CENTER", pieHolder, "CENTER", 0, 0)
+            line:SetEndPoint("CENTER", pieHolder, "CENTER", math.sin(angle) * radius, math.cos(angle) * radius)
+            line:Show()
+        end
+    end
+    if edgeLine and SparkOn() and progress > 0.001 and progress < 0.999 and shown > 0.002 then
+        edgeLine:SetThickness(math.max(2, slice))
+        edgeLine:SetColorTexture(1, 0.96, 0.85, 1)
+        edgeLine:SetStartPoint("CENTER", pieHolder, "CENTER", 0, 0)
+        edgeLine:SetEndPoint("CENTER", pieHolder, "CENTER", math.sin(lead) * radius, math.cos(lead) * radius)
+        edgeLine:Show()
+    elseif edgeLine then
+        edgeLine:Hide()
+    end
+    return true
+end
+
 local function ShowCircle(startTime, duration, progress)
     display:Show()
     EnsureCircle()
@@ -415,6 +483,9 @@ local function ShowCircle(startTime, duration, progress)
     circleFill:SetColorTexture(0.02, 0.02, 0.02, 0.82)
     circleFill:Show()
     pieHolder:Show()
+    if UpdatePie(progress) then
+        return
+    end
     HideWedges()
     if shown >= 0.995 then
         fullDisc:SetVertexColor(r, g, b, alpha)
@@ -859,14 +930,12 @@ driver:SetScript("OnEvent", function(_, event, ...)
             HandleSwing(second, third)
         end
     elseif event == "PLAYER_ENTER_COMBAT" then
-        SeedMelee()
         RefreshText()
     elseif event == "PLAYER_LEAVE_COMBAT" then
         ClearHand(HAND_MAIN)
         ClearHand(HAND_OFF)
         RefreshText()
     elseif event == "START_AUTOREPEAT_SPELL" then
-        SeedRanged()
         RefreshText()
     elseif event == "STOP_AUTOREPEAT_SPELL" then
         ClearHand(HAND_RANGED)
