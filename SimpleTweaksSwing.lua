@@ -217,6 +217,44 @@ local function EnsureCircle()
     pie:Hide()
 end
 
+local function ClipSwipe()
+    if not circlePie or not circlePie.CreateMaskTexture then
+        return
+    end
+    if not circlePie.stMask then
+        local mask = circlePie:CreateMaskTexture()
+        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(circlePie)
+        circlePie.stMask = mask
+    end
+    local mask = circlePie.stMask
+    local function ClipRegion(region)
+        if not region or region.stCircle or type(region.AddMaskTexture) ~= "function" then
+            return
+        end
+        if region.GetObjectType and region:GetObjectType() ~= "Texture" then
+            return
+        end
+        if pcall(region.AddMaskTexture, region, mask) then
+            region.stCircle = true
+        end
+    end
+    if circlePie.GetRegions then
+        for _, region in ipairs({ circlePie:GetRegions() }) do
+            ClipRegion(region)
+        end
+    end
+    if circlePie.GetChildren then
+        for _, child in ipairs({ circlePie:GetChildren() }) do
+            if child.GetRegions then
+                for _, region in ipairs({ child:GetRegions() }) do
+                    ClipRegion(region)
+                end
+            end
+        end
+    end
+end
+
 local function ApplyCircleGeometry()
     EnsureCircle()
     local size = CircleSize()
@@ -299,7 +337,7 @@ local function ShowCircle(startTime, duration, progress)
     local br, bg, bb = BorderColor()
     circleBorder:SetColorTexture(br, bg, bb, 1)
     circleBorder:Show()
-    circleFill:SetColorTexture(br * 0.35, bg * 0.35, bb * 0.35, 0.85)
+    circleFill:SetColorTexture(0.02, 0.02, 0.02, 0.82)
     circleFill:Show()
     if not circlePie or not PlainNumber(startTime) or not PlainNumber(duration) or duration <= 0 then
         return
@@ -331,6 +369,7 @@ local function ShowCircle(startTime, duration, progress)
         circlePie:SetDrawEdge(true)
     end
     ApplySwipeColor(circlePie, r, g, b, alpha)
+    ClipSwipe()
 end
 
 local function FontSize()
