@@ -84,6 +84,171 @@ local function FormatRemaining(remain)
     return string.format("%." .. DecimalPlaces() .. "f", remain)
 end
 
+local CIRCLE_DEFAULT = 9
+
+local function TimerStyle()
+    if SimpleTweaksDB and SimpleTweaksDB.swingTimerStyle == "circle" then
+        return "circle"
+    end
+    return "text"
+end
+
+local function PieFills()
+    return SimpleTweaksDB and SimpleTweaksDB.swingTimerPie == "fill"
+end
+
+local function SparkOn()
+    return SimpleTweaksDB and SimpleTweaksDB.swingTimerSpark and true or false
+end
+
+local function CircleSize()
+    local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerCircleSize) or CIRCLE_DEFAULT
+    if size < 8 then
+        size = 8
+    elseif size > 64 then
+        size = 64
+    end
+    return math.floor(size + 0.5)
+end
+
+local function CircleColor()
+    local db = SimpleTweaksDB
+    return ClampUnit(db and db.swingTimerCircleR, 1), ClampUnit(db and db.swingTimerCircleG, 0.86), ClampUnit(db and db.swingTimerCircleB, 0.55)
+end
+
+local function BorderColor()
+    local db = SimpleTweaksDB
+    return ClampUnit(db and db.swingTimerBorderR, 0), ClampUnit(db and db.swingTimerBorderG, 0), ClampUnit(db and db.swingTimerBorderB, 0)
+end
+
+local circleBorder
+local circlePie
+local pieStamp
+local sampleStart
+
+local function AddCircleMask(owner, texture)
+    if not texture or type(texture.AddMaskTexture) ~= "function" or type(owner.CreateMaskTexture) ~= "function" then
+        return
+    end
+    local mask = owner:CreateMaskTexture()
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(texture)
+    texture:AddMaskTexture(mask)
+end
+
+local function EnsureCircle()
+    if circleBorder then
+        return
+    end
+    circleBorder = display:CreateTexture(nil, "BACKGROUND", nil, 0)
+    circleBorder:SetTexture("Interface\\Buttons\\WHITE8X8")
+    circleBorder:SetPoint("CENTER")
+    AddCircleMask(display, circleBorder)
+    circleBorder:Hide()
+
+    local ok, pie = pcall(CreateFrame, "Cooldown", nil, display, "CooldownFrameTemplate")
+    if ok and pie then
+        circlePie = pie
+        pie:SetPoint("CENTER")
+        if pie.SetDrawBling then
+            pie:SetDrawBling(false)
+        end
+        if pie.SetDrawSwipe then
+            pie:SetDrawSwipe(true)
+        end
+        if pie.SetHideCountdownNumbers then
+            pie:SetHideCountdownNumbers(true)
+        end
+        if pie.SetUseCircularEdge then
+            pie:SetUseCircularEdge(true)
+        end
+        pie:EnableMouse(false)
+        if pie.SetMouseClickEnabled then
+            pie:SetMouseClickEnabled(false)
+        end
+        if pie.SetMouseMotionEnabled then
+            pie:SetMouseMotionEnabled(false)
+        end
+        pie:Hide()
+    end
+end
+
+local function ApplyCircleGeometry()
+    EnsureCircle()
+    local size = CircleSize()
+    local thickness = math.max(1, math.floor(size / 9 + 0.5))
+    local inner = math.max(1, size - thickness * 2)
+    circleBorder:SetSize(size, size)
+    circleBorder:SetColorTexture(BorderColor())
+    if circlePie then
+        circlePie:SetSize(inner, inner)
+        if circlePie.SetEdgeScale then
+            local scale = inner / 36
+            if scale < 0.2 then
+                scale = 0.2
+            elseif scale > 1.5 then
+                scale = 1.5
+            end
+            circlePie:SetEdgeScale(scale)
+        end
+    end
+    local hit = size
+    if editing then
+        hit = math.max(size, 36)
+    end
+    display:SetSize(hit, hit)
+    if selection and selection.SetFrameLevel then
+        local level = display:GetFrameLevel()
+        if circlePie and circlePie.SetFrameLevel then
+            circlePie:SetFrameLevel(level + 2)
+        end
+        selection:SetFrameLevel(level + 8)
+    end
+end
+
+local function HideCircle()
+    if circleBorder then
+        circleBorder:Hide()
+    end
+    if circlePie then
+        circlePie:Hide()
+        if circlePie.Clear then
+            circlePie:Clear()
+        end
+    end
+    pieStamp = nil
+end
+
+local function ShowCircle(startTime, duration, progress)
+    EnsureCircle()
+    ApplyCircleGeometry()
+    circleBorder:Show()
+    if progress < 0 then
+        progress = 0
+    elseif progress > 1 then
+        progress = 1
+    end
+    local alpha = 0.5 + 0.5 * progress
+    local reverse = PieFills()
+    local spark = SparkOn()
+    if not circlePie then
+        return
+    end
+    circlePie:Show()
+    if circlePie.SetDrawEdge then
+        circlePie:SetDrawEdge(spark)
+    end
+    local stamp = string.format("%.2f|%.2f|%s", startTime or 0, duration or 0, reverse and "f" or "d")
+    if pieStamp ~= stamp and startTime and duration and duration > 0 then
+        pieStamp = stamp
+        if circlePie.SetReverse then
+            circlePie:SetReverse(reverse)
+        end
+        circlePie:SetCooldown(startTime, duration)
+    end
+    circlePie:SetSwipeColor(CircleColor(), alpha)
+end
+
 local function FontSize()
     local size = SimpleTweaksDB and tonumber(SimpleTweaksDB.swingTimerFontSize) or DEFAULT_FONT_SIZE
     if not size then
@@ -105,7 +270,9 @@ local function ApplyFont()
         pcall(text.SetFont, text, "Fonts\\FRIZQT__.TTF", size, "OUTLINE")
     end
     text:SetTextColor(TextColor())
-    display:SetSize(math.max(72, size * 3.4), math.max(28, size + 12))
+    if TimerStyle() ~= "circle" then
+        display:SetSize(math.max(72, size * 3.4), math.max(28, size + 12))
+    end
 end
 
 local function BaseLayoutNames()
@@ -249,8 +416,8 @@ end
 
 -- Soonest live swing. An overdue active swing stays at 0 until the client
 -- sends the hit or the attack stops, so a delayed shot does not vanish.
-local function NextRemaining(now)
-    local best
+local function NextSwing(now)
+    local bestRemain, bestSpeed, bestExpiry
     for _, swing in pairs(swings) do
         if swing.active and swing.expiry then
             local remain = swing.expiry - now
@@ -261,13 +428,15 @@ local function NextRemaining(now)
                 if remain < 0 then
                     remain = 0
                 end
-                if not best or remain < best then
-                    best = remain
+                if not bestRemain or remain < bestRemain then
+                    bestRemain = remain
+                    bestSpeed = swing.speed
+                    bestExpiry = swing.expiry
                 end
             end
         end
     end
-    return best
+    return bestRemain, bestSpeed, bestExpiry
 end
 
 local function RefreshText()
@@ -275,7 +444,30 @@ local function RefreshText()
         display:Hide()
         return
     end
-    local remain = NextRemaining(GetTime())
+    local now = GetTime()
+    local remain, speed, expiry = NextSwing(now)
+    if TimerStyle() == "circle" then
+        text:Hide()
+        if remain and speed and speed > 0 and expiry then
+            local progress = 1 - (remain / speed)
+            ShowCircle(expiry - speed, speed, progress)
+            display:Show()
+        elseif editing then
+            local duration = 1.6
+            if not sampleStart or now >= sampleStart + duration then
+                sampleStart = now
+                pieStamp = nil
+            end
+            ShowCircle(sampleStart, duration, (now - sampleStart) / duration)
+            display:Show()
+        else
+            HideCircle()
+            display:Hide()
+        end
+        return
+    end
+    HideCircle()
+    text:Show()
     if remain then
         text:SetText(FormatRemaining(remain))
     elseif editing then
@@ -322,6 +514,7 @@ local function EnterEditMode()
     editing = true
     display.editing = true
     display:EnableMouse(true)
+    selection:EnableMouse(true)
     selection:Show()
     if layoutKey == "default" and C_EditMode and C_EditMode.GetLayouts then
         local ok, info = pcall(C_EditMode.GetLayouts)
@@ -340,6 +533,7 @@ local function ExitEditMode()
     editing = false
     display.editing = false
     display:EnableMouse(false)
+    selection:EnableMouse(false)
     selection:Hide()
     SavePosition()
     RefreshText()
@@ -382,6 +576,66 @@ function SimpleTweaksSwing.SetDecimals(decimals)
     end
     if SimpleTweaksDB then
         SimpleTweaksDB.swingTimerDecimals = decimals
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetStyle(style)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerStyle = style == "circle" and "circle" or "text"
+    end
+    pieStamp = nil
+    sampleStart = nil
+    if TimerStyle() == "circle" then
+        ApplyCircleGeometry()
+    else
+        ApplyFont()
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetPie(direction)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerPie = direction == "fill" and "fill" or "drain"
+    end
+    pieStamp = nil
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetSpark(on)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerSpark = on and true or false
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetCircleSize(size)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerCircleSize = tonumber(size) or CIRCLE_DEFAULT
+    end
+    if TimerStyle() == "circle" then
+        ApplyCircleGeometry()
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetCircleColor(r, g, b)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerCircleR = ClampUnit(r, 1)
+        SimpleTweaksDB.swingTimerCircleG = ClampUnit(g, 0.86)
+        SimpleTweaksDB.swingTimerCircleB = ClampUnit(b, 0.55)
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetBorderColor(r, g, b)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerBorderR = ClampUnit(r, 0)
+        SimpleTweaksDB.swingTimerBorderG = ClampUnit(g, 0)
+        SimpleTweaksDB.swingTimerBorderB = ClampUnit(b, 0)
+    end
+    if circleBorder then
+        circleBorder:SetColorTexture(BorderColor())
     end
     RefreshText()
 end
@@ -497,6 +751,19 @@ text:SetJustifyV("MIDDLE")
 
 selection:SetAllPoints()
 selection:EnableMouse(false)
+selection:RegisterForDrag("LeftButton")
+selection:SetScript("OnDragStart", function()
+    if not editing or InCombatLockdown() then
+        return
+    end
+    dragging = true
+    display:StartMoving()
+end)
+selection:SetScript("OnDragStop", function()
+    display:StopMovingOrSizing()
+    dragging = false
+    SavePosition()
+end)
 selection:SetBackdrop({
     bgFile = "Interface\\Buttons\\WHITE8X8",
     edgeFile = "Interface\\Buttons\\WHITE8X8",

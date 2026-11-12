@@ -9,12 +9,23 @@ local DEFAULTS = {
     swingTimerColorR = 1,
     swingTimerColorG = 0.86,
     swingTimerColorB = 0.55,
+    swingTimerStyle = "text",
+    swingTimerPie = "drain",
+    swingTimerSpark = false,
+    swingTimerCircleSize = 9,
+    swingTimerCircleR = 1,
+    swingTimerCircleG = 0.86,
+    swingTimerCircleB = 0.55,
+    swingTimerBorderR = 0,
+    swingTimerBorderG = 0,
+    swingTimerBorderB = 0,
 }
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
 local optionChecks = {}
 local swingSizeText
 local SWING_FONT_SIZES = { 12, 14, 16, 18, 20, 24, 28, 32, 40 }
+local SWING_CIRCLE_SIZES = { 9, 12, 16, 20, 24, 32, 40, 48 }
 local nameplateIndicators = {}
 local activeNameplateUnits = {}
 local rangeUpdateElapsed = 0
@@ -272,7 +283,7 @@ local function SetOption(setting, enabled)
         disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
         hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
-        swingTimer = enabled and "Swing-Timer aktiviert." or "Swing-Timer deaktiviert.",
+        swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
     }
     Print(messages[setting] or "Einstellung geändert.")
     if optionChecks[setting] then optionChecks[setting]:SetChecked(enabled) end
@@ -283,7 +294,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(470, 324)
+    window:SetSize(520, 430)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -317,7 +328,7 @@ local function CreateOptionsWindow()
     AddOption("disableMapFade", "Karte beim Bewegen nicht ausblenden", -68)
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
     AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
-    AddOption("swingTimer", "Swing-Timer", -200)
+    AddOption("swingTimer", "Schwungtimer", -200)
 
     local function SwingFontSize()
         local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerFontSize) or 18
@@ -381,7 +392,11 @@ local function CreateOptionsWindow()
     swingSizeText:SetJustifyH("CENTER")
     swingSizeText:SetText(tostring(SwingFontSize()))
     local larger = MakeFontStep("+")
-    smaller:SetPoint("LEFT", swingCheck.Text, "RIGHT", 14, 0)
+    local schriftLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    schriftLabel:SetPoint("TOPLEFT", 52, -244)
+    schriftLabel:SetText("Schrift")
+    schriftLabel:SetTextColor(0.75, 0.66, 0.5)
+    smaller:SetPoint("LEFT", schriftLabel, "RIGHT", 8, 0)
     swingSizeText:SetPoint("LEFT", smaller, "RIGHT", 2, 0)
     larger:SetPoint("LEFT", swingSizeText, "RIGHT", 2, 0)
     smaller:SetScript("OnClick", function() StepSwingFont(-1) end)
@@ -542,6 +557,281 @@ local function CreateOptionsWindow()
         decimalButtons[#decimalButtons + 1] = button
     end
     StyleDecimalButtons()
+
+    local function PaintChoice(button, active)
+        button.label:SetTextColor(active and 1 or 0.55, active and 0.86 or 0.48, active and 0.55 or 0.38)
+        button.bg:SetColorTexture(0.65, 0.38, 0.16, active and 0.55 or 0)
+    end
+
+    local function MakeChoice(labelText, width)
+        local button = CreateFrame("Button", nil, window)
+        button:SetSize(width, 22)
+        local bg = button:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        button.bg = bg
+        local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("CENTER", 0, 1)
+        label:SetText(labelText)
+        button.label = label
+        return button
+    end
+
+    local function OpenColor(getColor, applyColor)
+        local r, g, b = getColor()
+        local function Apply(nr, ng, nb)
+            if nr then
+                applyColor(nr, ng, nb)
+            end
+        end
+        if ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow then
+            ColorPickerFrame:SetupColorPickerAndShow({
+                r = r,
+                g = g,
+                b = b,
+                opacity = 1,
+                hasOpacity = false,
+                swatchFunc = function()
+                    if not ColorPickerFrame.GetColorRGB then
+                        return
+                    end
+                    local ok, pickedR, pickedG, pickedB = pcall(ColorPickerFrame.GetColorRGB, ColorPickerFrame)
+                    if ok then
+                        Apply(pickedR, pickedG, pickedB)
+                    end
+                end,
+                cancelFunc = function(previous)
+                    if type(previous) == "table" then
+                        Apply(previous.r or r, previous.g or g, previous.b or b)
+                    else
+                        Apply(r, g, b)
+                    end
+                end,
+            })
+            return
+        end
+        if not ColorPickerFrame or not ColorPickerFrame.SetColorRGB then
+            return
+        end
+        ColorPickerFrame.func = function()
+            Apply(ColorPickerFrame:GetColorRGB())
+        end
+        ColorPickerFrame.hasOpacity = false
+        ColorPickerFrame.opacityFunc = nil
+        ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+        ColorPickerFrame.cancelFunc = function(previous)
+            local previousR, previousG, previousB = r, g, b
+            if type(previous) == "table" then
+                previousR, previousG, previousB = previous.r or r, previous.g or g, previous.b or b
+            end
+            Apply(previousR, previousG, previousB)
+        end
+        ColorPickerFrame:SetColorRGB(r, g, b)
+        ColorPickerFrame:Hide()
+        ColorPickerFrame:Show()
+    end
+
+    local function MakeSwatch(tip, getColor, applyColor)
+        local button = CreateFrame("Button", nil, window)
+        button:SetSize(18, 18)
+        local edge = button:CreateTexture(nil, "BACKGROUND")
+        edge:SetAllPoints()
+        edge:SetColorTexture(0.65, 0.38, 0.16, 1)
+        local fill = button:CreateTexture(nil, "ARTWORK")
+        fill:SetPoint("TOPLEFT", 2, -2)
+        fill:SetPoint("BOTTOMRIGHT", -2, 2)
+        local red, green, blue = getColor()
+        fill:SetColorTexture(red, green, blue, 1)
+        button:SetScript("OnClick", function()
+            OpenColor(getColor, function(nr, ng, nb)
+                fill:SetColorTexture(nr, ng, nb, 1)
+                applyColor(nr, ng, nb)
+            end)
+        end)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tip, 1, 0.85, 0.55)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        return button
+    end
+
+    local function ClampColor(value, fallback)
+        value = tonumber(value)
+        if not value or value ~= value then
+            return fallback
+        end
+        if value < 0 then
+            return 0
+        end
+        if value > 1 then
+            return 1
+        end
+        return value
+    end
+
+    local textMode = MakeChoice("Text", 52)
+    local circleMode = MakeChoice("Kreis", 58)
+    textMode:SetPoint("LEFT", swingCheck.Text, "RIGHT", 16, 0)
+    circleMode:SetPoint("LEFT", textMode, "RIGHT", 4, 0)
+
+    local function CurrentStyle()
+        if SimpleTweaksDB and SimpleTweaksDB.swingTimerStyle == "circle" then
+            return "circle"
+        end
+        return "text"
+    end
+
+    local function PaintStyle()
+        local style = CurrentStyle()
+        PaintChoice(textMode, style == "text")
+        PaintChoice(circleMode, style == "circle")
+    end
+
+    local function SelectStyle(style)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetStyle then
+            SimpleTweaksSwing.SetStyle(style)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerStyle = style
+        end
+        PaintStyle()
+    end
+    textMode:SetScript("OnClick", function() SelectStyle("text") end)
+    circleMode:SetScript("OnClick", function() SelectStyle("circle") end)
+    PaintStyle()
+
+    local function CurrentCircleSize()
+        local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerCircleSize) or 9
+        local best, bestDiff = SWING_CIRCLE_SIZES[1], math.huge
+        for _, candidate in ipairs(SWING_CIRCLE_SIZES) do
+            local diff = math.abs(candidate - size)
+            if diff < bestDiff then
+                best, bestDiff = candidate, diff
+            end
+        end
+        return best
+    end
+
+    local function ApplyCircleSize(size)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetCircleSize then
+            SimpleTweaksSwing.SetCircleSize(size)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerCircleSize = size
+        end
+    end
+
+    local groesseLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    groesseLabel:SetPoint("TOPLEFT", 52, -284)
+    groesseLabel:SetText("Größe")
+    groesseLabel:SetTextColor(0.75, 0.66, 0.5)
+    local circleSmaller = MakeFontStep("-")
+    local circleSizeText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    circleSizeText:SetTextColor(0.9, 0.79, 0.61)
+    circleSizeText:SetWidth(28)
+    circleSizeText:SetJustifyH("CENTER")
+    circleSizeText:SetText(tostring(CurrentCircleSize()))
+    local circleLarger = MakeFontStep("+")
+    circleSmaller:SetPoint("LEFT", groesseLabel, "RIGHT", 10, 0)
+    circleSizeText:SetPoint("LEFT", circleSmaller, "RIGHT", 2, 0)
+    circleLarger:SetPoint("LEFT", circleSizeText, "RIGHT", 2, 0)
+
+    local function StepCircle(direction)
+        local size = CurrentCircleSize()
+        local index = 1
+        for i, candidate in ipairs(SWING_CIRCLE_SIZES) do
+            if candidate == size then
+                index = i
+                break
+            end
+        end
+        index = index + direction
+        if index < 1 then
+            index = 1
+        elseif index > #SWING_CIRCLE_SIZES then
+            index = #SWING_CIRCLE_SIZES
+        end
+        local nextSize = SWING_CIRCLE_SIZES[index]
+        circleSizeText:SetText(tostring(nextSize))
+        ApplyCircleSize(nextSize)
+    end
+    circleSmaller:SetScript("OnClick", function() StepCircle(-1) end)
+    circleLarger:SetScript("OnClick", function() StepCircle(1) end)
+
+    local function CircleFillColor()
+        local db = SimpleTweaksDB
+        return ClampColor(db and db.swingTimerCircleR, 1), ClampColor(db and db.swingTimerCircleG, 0.86), ClampColor(db and db.swingTimerCircleB, 0.55)
+    end
+
+    local function CircleEdgeColor()
+        local db = SimpleTweaksDB
+        return ClampColor(db and db.swingTimerBorderR, 0), ClampColor(db and db.swingTimerBorderG, 0), ClampColor(db and db.swingTimerBorderB, 0)
+    end
+
+    local fillSwatch = MakeSwatch("Kreisfarbe", CircleFillColor, function(r, g, b)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetCircleColor then
+            SimpleTweaksSwing.SetCircleColor(r, g, b)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerCircleR = r
+            SimpleTweaksDB.swingTimerCircleG = g
+            SimpleTweaksDB.swingTimerCircleB = b
+        end
+    end)
+    local edgeSwatch = MakeSwatch("Randfarbe", CircleEdgeColor, function(r, g, b)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetBorderColor then
+            SimpleTweaksSwing.SetBorderColor(r, g, b)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerBorderR = r
+            SimpleTweaksDB.swingTimerBorderG = g
+            SimpleTweaksDB.swingTimerBorderB = b
+        end
+    end)
+    fillSwatch:SetPoint("LEFT", circleLarger, "RIGHT", 12, 0)
+    edgeSwatch:SetPoint("LEFT", fillSwatch, "RIGHT", 6, 0)
+
+    local drainMode = MakeChoice("Abnehmend", 96)
+    local fillMode = MakeChoice("Zunehmend", 96)
+    drainMode:SetPoint("TOPLEFT", 52, -324)
+    fillMode:SetPoint("LEFT", drainMode, "RIGHT", 4, 0)
+
+    local function CurrentPie()
+        if SimpleTweaksDB and SimpleTweaksDB.swingTimerPie == "fill" then
+            return "fill"
+        end
+        return "drain"
+    end
+
+    local function PaintPie()
+        local pie = CurrentPie()
+        PaintChoice(drainMode, pie == "drain")
+        PaintChoice(fillMode, pie == "fill")
+    end
+
+    local function SelectPie(direction)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetPie then
+            SimpleTweaksSwing.SetPie(direction)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerPie = direction
+        end
+        PaintPie()
+    end
+    drainMode:SetScript("OnClick", function() SelectPie("drain") end)
+    fillMode:SetScript("OnClick", function() SelectPie("fill") end)
+    PaintPie()
+
+    local spark = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
+    spark:SetPoint("LEFT", fillMode, "RIGHT", 10, 0)
+    spark.Text:SetText("Funke")
+    spark.Text:SetTextColor(0.9, 0.79, 0.61)
+    spark:SetChecked(SimpleTweaksDB and SimpleTweaksDB.swingTimerSpark and true or false)
+    spark:SetScript("OnClick", function(self)
+        local on = self:GetChecked() and true or false
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetSpark then
+            SimpleTweaksSwing.SetSpark(on)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerSpark = on
+        end
+    end)
+
     return window
 end
 
@@ -572,7 +862,7 @@ local function HandleSlashCommand(message)
         elseif value == "off" or value == "aus" then
             SetOption("swingTimer", false)
         else
-            Print("Swing-Timer: " .. (IsEnabled("swingTimer") and "an" or "aus") .. ". /tweaks swing an|aus")
+            Print("Schwungtimer: " .. (IsEnabled("swingTimer") and "an" or "aus") .. ". /tweaks schwung an|aus")
         end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
