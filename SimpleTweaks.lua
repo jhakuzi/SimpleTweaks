@@ -5,6 +5,10 @@ local DEFAULTS = {
     hunterRangeIndicator = false,
     swingTimer = false,
     swingTimerFontSize = 18,
+    swingTimerDecimals = 1,
+    swingTimerColorR = 1,
+    swingTimerColorG = 0.86,
+    swingTimerColorB = 0.55,
 }
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
@@ -382,6 +386,162 @@ local function CreateOptionsWindow()
     larger:SetPoint("LEFT", swingSizeText, "RIGHT", 2, 0)
     smaller:SetScript("OnClick", function() StepSwingFont(-1) end)
     larger:SetScript("OnClick", function() StepSwingFont(1) end)
+
+    local function SwingTextColor()
+        local db = SimpleTweaksDB
+        local function Clamp(value, fallback)
+            value = tonumber(value)
+            if not value or value ~= value then
+                return fallback
+            end
+            if value < 0 then
+                return 0
+            end
+            if value > 1 then
+                return 1
+            end
+            return value
+        end
+        return Clamp(db and db.swingTimerColorR, 1), Clamp(db and db.swingTimerColorG, 0.86), Clamp(db and db.swingTimerColorB, 0.55)
+    end
+
+    local swatch = CreateFrame("Button", nil, window)
+    swatch:SetSize(18, 18)
+    local swatchBorder = swatch:CreateTexture(nil, "BACKGROUND")
+    swatchBorder:SetAllPoints()
+    swatchBorder:SetColorTexture(0.65, 0.38, 0.16, 1)
+    local swatchFill = swatch:CreateTexture(nil, "ARTWORK")
+    swatchFill:SetPoint("TOPLEFT", 2, -2)
+    swatchFill:SetPoint("BOTTOMRIGHT", -2, 2)
+    local colorR, colorG, colorB = SwingTextColor()
+    swatchFill:SetColorTexture(colorR, colorG, colorB, 1)
+    swatch:SetPoint("LEFT", larger, "RIGHT", 10, 0)
+    swatch:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(swatch, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Textfarbe", 1, 0.85, 0.55)
+        GameTooltip:Show()
+    end)
+    swatch:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local function ApplySwingColor(r, g, b)
+        swatchFill:SetColorTexture(r, g, b, 1)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetColor then
+            SimpleTweaksSwing.SetColor(r, g, b)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerColorR = r
+            SimpleTweaksDB.swingTimerColorG = g
+            SimpleTweaksDB.swingTimerColorB = b
+        end
+    end
+
+    local function OpenSwingColorPicker()
+        local r, g, b = SwingTextColor()
+        if ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow then
+            ColorPickerFrame:SetupColorPickerAndShow({
+                r = r,
+                g = g,
+                b = b,
+                opacity = 1,
+                hasOpacity = false,
+                swatchFunc = function()
+                    if not ColorPickerFrame.GetColorRGB then
+                        return
+                    end
+                    local ok, pickedR, pickedG, pickedB = pcall(ColorPickerFrame.GetColorRGB, ColorPickerFrame)
+                    if ok then
+                        ApplySwingColor(pickedR, pickedG, pickedB)
+                    end
+                end,
+                cancelFunc = function(previous)
+                    if type(previous) == "table" then
+                        ApplySwingColor(previous.r or r, previous.g or g, previous.b or b)
+                    else
+                        ApplySwingColor(r, g, b)
+                    end
+                end,
+            })
+            return
+        end
+        if not ColorPickerFrame or not ColorPickerFrame.SetColorRGB then
+            return
+        end
+        ColorPickerFrame.func = function()
+            ApplySwingColor(ColorPickerFrame:GetColorRGB())
+        end
+        ColorPickerFrame.hasOpacity = false
+        ColorPickerFrame.opacityFunc = nil
+        ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+        ColorPickerFrame.cancelFunc = function(previous)
+            local previousR, previousG, previousB = r, g, b
+            if type(previous) == "table" then
+                previousR, previousG, previousB = previous.r or r, previous.g or g, previous.b or b
+            end
+            ApplySwingColor(previousR, previousG, previousB)
+        end
+        ColorPickerFrame:SetColorRGB(r, g, b)
+        ColorPickerFrame:Hide()
+        ColorPickerFrame:Show()
+    end
+    swatch:SetScript("OnClick", OpenSwingColorPicker)
+
+    local decimalButtons = {}
+    local function CurrentDecimals()
+        local decimals = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerDecimals)
+        if decimals == 0 or decimals == 2 then
+            return decimals
+        end
+        return 1
+    end
+
+    local function StyleDecimalButtons()
+        local current = CurrentDecimals()
+        for _, button in ipairs(decimalButtons) do
+            local active = button.decimals == current
+            button.label:SetTextColor(active and 1 or 0.55, active and 0.86 or 0.48, active and 0.55 or 0.38)
+            button.bg:SetColorTexture(0.65, 0.38, 0.16, active and 0.55 or 0)
+        end
+    end
+
+    local function SelectDecimals(decimals)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetDecimals then
+            SimpleTweaksSwing.SetDecimals(decimals)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerDecimals = decimals
+        end
+        StyleDecimalButtons()
+    end
+
+    local decimalLabels = { [0] = "1", [1] = "1.0", [2] = "1.00" }
+    local decimalWidths = { [0] = 20, [1] = 30, [2] = 36 }
+    local previousDecimal
+    for _, decimals in ipairs({ 0, 1, 2 }) do
+        local button = CreateFrame("Button", nil, window)
+        button:SetSize(decimalWidths[decimals], 22)
+        button.decimals = decimals
+        local bg = button:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        button.bg = bg
+        local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("CENTER", 0, 1)
+        label:SetText(decimalLabels[decimals])
+        button.label = label
+        button:SetScript("OnClick", function() SelectDecimals(decimals) end)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            local tip = decimals == 0 and "Keine Nachkommastelle" or (decimals == 1 and "Eine Nachkommastelle" or "Zwei Nachkommastellen")
+            GameTooltip:SetText(tip, 1, 0.85, 0.55)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        if previousDecimal then
+            button:SetPoint("LEFT", previousDecimal, "RIGHT", 1, 0)
+        else
+            button:SetPoint("LEFT", swatch, "RIGHT", 8, 0)
+        end
+        previousDecimal = button
+        decimalButtons[#decimalButtons + 1] = button
+    end
+    StyleDecimalButtons()
     return window
 end
 

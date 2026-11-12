@@ -22,6 +22,6 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 - `/tweaks karte an|aus` schaltet das Ausblenden der Karte um.
 - `/tweaks makros an|aus` schaltet das Ausblenden der Makronamen um.
 - `/tweaks swing an|aus` schaltet den Swing-Timer um.
-- Das Einstellungsfenster übernimmt Änderungen sofort. Neben dem Swing-Timer steht die Schriftgröße.
+- Das Einstellungsfenster übernimmt Änderungen sofort. Neben dem Swing-Timer stehen Schriftgröße, Textfarbe und die Nachkommastellen (0, 1 oder 2).
 - **Swing-Timer** zählt als Text bis zum nächsten eigenen Nahkampfschlag oder Fernkampfangriff herunter. Ohne laufenden Angriff bleibt er verborgen. Im Bearbeitungsmodus (Esc) lässt sich der Text verschieben; die Position wird pro Layout gespeichert.
 - **Jäger Reichweitenindikator** zeigt nur am aktuellen feindlichen Ziel einen gefüllten Kreis links neben dem Lebensbalken: Rot außerhalb der Reichweite, Orange in Nahkampfreichweite und Grün in Auto-Schuss-Reichweite. Nahkampf wird mit einem 5-Yard-Gegenstandsreichweitentest geprüft, da Raptor Strike auf WoW Forever keine verlässliche Reichweitenabfrage liefert. Wenn der Client keinen eindeutigen Wert liefert, bleibt der Punkt verborgen.

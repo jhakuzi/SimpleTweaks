@@ -53,6 +53,37 @@ local function PlainNumber(value)
     return value == value and value > -math.huge and value < math.huge
 end
 
+local function ClampUnit(value, fallback)
+    value = tonumber(value)
+    if not value or value ~= value then
+        return fallback
+    end
+    if value < 0 then
+        return 0
+    end
+    if value > 1 then
+        return 1
+    end
+    return value
+end
+
+local function TextColor()
+    local db = SimpleTweaksDB
+    return ClampUnit(db and db.swingTimerColorR, 1), ClampUnit(db and db.swingTimerColorG, 0.86), ClampUnit(db and db.swingTimerColorB, 0.55)
+end
+
+local function DecimalPlaces()
+    local decimals = SimpleTweaksDB and tonumber(SimpleTweaksDB.swingTimerDecimals)
+    if decimals == 0 or decimals == 2 then
+        return decimals
+    end
+    return 1
+end
+
+local function FormatRemaining(remain)
+    return string.format("%." .. DecimalPlaces() .. "f", remain)
+end
+
 local function FontSize()
     local size = SimpleTweaksDB and tonumber(SimpleTweaksDB.swingTimerFontSize) or DEFAULT_FONT_SIZE
     if not size then
@@ -73,7 +104,7 @@ local function ApplyFont()
     if not ok then
         pcall(text.SetFont, text, "Fonts\\FRIZQT__.TTF", size, "OUTLINE")
     end
-    text:SetTextColor(1, 0.86, 0.55)
+    text:SetTextColor(TextColor())
     display:SetSize(math.max(72, size * 3.4), math.max(28, size + 12))
 end
 
@@ -246,9 +277,9 @@ local function RefreshText()
     end
     local remain = NextRemaining(GetTime())
     if remain then
-        text:SetText(string.format("%.1f", remain))
+        text:SetText(FormatRemaining(remain))
     elseif editing then
-        text:SetText("1.6")
+        text:SetText(FormatRemaining(1.6))
     else
         display:Hide()
         return
@@ -332,6 +363,27 @@ local function HookEditMode()
             NoteLayouts(layoutInfo)
         end, driver)
     end
+end
+
+function SimpleTweaksSwing.SetColor(r, g, b)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerColorR = ClampUnit(r, 1)
+        SimpleTweaksDB.swingTimerColorG = ClampUnit(g, 0.86)
+        SimpleTweaksDB.swingTimerColorB = ClampUnit(b, 0.55)
+    end
+    text:SetTextColor(TextColor())
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetDecimals(decimals)
+    decimals = tonumber(decimals)
+    if decimals ~= 0 and decimals ~= 2 then
+        decimals = 1
+    end
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerDecimals = decimals
+    end
+    RefreshText()
 end
 
 function SimpleTweaksSwing.SetFontSize(size)
