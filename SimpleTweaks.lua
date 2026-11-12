@@ -75,7 +75,8 @@ local function RefreshMacroNames()
     end
 end
 
-local function SetIndicatorColor(indicator, color)
+local function SetIndicatorColor(entry, color)
+    local indicator = entry.indicator
     if color then
         if color == "orange" then
             indicator:SetColorTexture(1, 0.65, 0, 1)
@@ -84,8 +85,10 @@ local function SetIndicatorColor(indicator, color)
         elseif color == "red" then
             indicator:SetColorTexture(1, 0, 0, 1)
         end
+        entry.border:Show()
         indicator:Show()
     else
+        entry.border:Hide()
         indicator:Hide()
     end
 end
@@ -138,7 +141,11 @@ local function EnsureNameplateIndicator(unit)
     local entry = unitFrame.simpleTweaksRangeIndicator
     local needsAnchor = false
     if not entry then
-        local indicator = unitFrame:CreateTexture(nil, "OVERLAY")
+        local border = unitFrame:CreateTexture(nil, "OVERLAY", nil, 1)
+        border:SetTexture("Interface\\Buttons\\WHITE8X8")
+        border:SetColorTexture(0, 0, 0, 1)
+        border:SetSize(9, 9)
+        local indicator = unitFrame:CreateTexture(nil, "OVERLAY", nil, 2)
         indicator:SetTexture("Interface\\Buttons\\WHITE8X8")
         indicator:SetSize(7, 7)
         local mask
@@ -147,26 +154,32 @@ local function EnsureNameplateIndicator(unit)
             mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
             mask:SetAllPoints(indicator)
             indicator:AddMaskTexture(mask)
+            local borderMask = unitFrame:CreateMaskTexture(nil, "OVERLAY")
+            borderMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            borderMask:SetAllPoints(border)
+            border:AddMaskTexture(borderMask)
         end
-        entry = { indicator = indicator, mask = mask, healthBar = healthBar }
+        entry = { indicator = indicator, border = border, mask = mask, healthBar = healthBar }
         unitFrame.simpleTweaksRangeIndicator = entry
         needsAnchor = true
     elseif entry.healthBar ~= healthBar then
         entry.indicator:ClearAllPoints()
+        entry.border:ClearAllPoints()
         entry.healthBar = healthBar
         needsAnchor = true
     end
     if needsAnchor then
-        entry.indicator:SetPoint("RIGHT", healthBar, "LEFT", -4, 0)
+        entry.border:SetPoint("CENTER", healthBar, "LEFT", -12, 0)
+        entry.indicator:SetPoint("CENTER", entry.border, "CENTER", 0, 0)
     end
     nameplateIndicators[unit] = entry
-    return entry.indicator
+    return entry
 end
 
 local function UpdateNameplateIndicator(unit)
     if not currentTargetUnit or unit ~= currentTargetUnit or not UnitIsUnit(unit, "target") then
         local oldEntry = nameplateIndicators[unit]
-        if oldEntry then SetIndicatorColor(oldEntry.indicator, nil) end
+        if oldEntry then SetIndicatorColor(oldEntry, nil) end
         return
     end
     if type(UnitClass) ~= "function" then return end
@@ -199,14 +212,14 @@ end
 local function SetNameplateIndicatorEnabled(enabled)
     if not enabled then
         for _, entry in pairs(nameplateIndicators) do
-            SetIndicatorColor(entry.indicator, nil)
+            SetIndicatorColor(entry, nil)
         end
         return
     end
     if type(UnitClass) ~= "function" then return end
     local _, class = UnitClass("player")
     if class ~= "HUNTER" then
-        for _, entry in pairs(nameplateIndicators) do SetIndicatorColor(entry.indicator, nil) end
+        for _, entry in pairs(nameplateIndicators) do SetIndicatorColor(entry, nil) end
         return
     end
 
@@ -223,12 +236,12 @@ local function SetNameplateIndicatorEnabled(enabled)
 
     if currentTargetUnit ~= targetUnit then
         if currentTargetUnit and nameplateIndicators[currentTargetUnit] then
-            SetIndicatorColor(nameplateIndicators[currentTargetUnit].indicator, nil)
+            SetIndicatorColor(nameplateIndicators[currentTargetUnit], nil)
         end
         currentTargetUnit = targetUnit
     end
     if not targetUnit then
-        for _, entry in pairs(nameplateIndicators) do SetIndicatorColor(entry.indicator, nil) end
+        for _, entry in pairs(nameplateIndicators) do SetIndicatorColor(entry, nil) end
         return
     end
     -- Only this token reaches spell/item range APIs.
@@ -344,7 +357,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         activeNameplateUnits[loadedAddon] = nil
         local entry = nameplateIndicators[loadedAddon]
-        if entry then SetIndicatorColor(entry.indicator, nil) end
+        if entry then SetIndicatorColor(entry, nil) end
         nameplateIndicators[loadedAddon] = nil
         if currentTargetUnit == loadedAddon then currentTargetUnit = nil end
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
