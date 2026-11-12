@@ -2,31 +2,21 @@ local addonName = ...
 local DEFAULTS = {
     disableMapFade = true,
     hideMacroNames = true,
+    hunterRangeIndicator = false,
 }
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
 local optionChecks = {}
-local cvarRows = {}
-local cvarNames = {}
-    local graphicsRefreshing = false
+local nameplateIndicators = {}
+local activeNameplateUnits = {}
+local rangeUpdateElapsed = 0
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cffd6a45eSimpleTweaks:|r " .. message)
 end
 
 local function IsEnabled(setting)
-    return SimpleTweaksDB[setting] ~= false
-end
-
-local function SetCVarChecked(name, value)
-    local ok, err = pcall(SetCVar, name, value)
-    if not ok then return false, tostring(err) end
-    local actual = GetCVar(name)
-    if actual == nil then return false, "CVar nicht verfügbar" end
-    if tostring(actual) ~= tostring(value) then
-        return false, "Wert wurde abgelehnt (aktuell: " .. tostring(actual) .. ")"
-    end
-    return true
+    return SimpleTweaksDB ~= nil and SimpleTweaksDB[setting] ~= false
 end
 
 local function UpdateMapFade(enable)
@@ -83,6 +73,108 @@ local function RefreshMacroNames()
     end
 end
 
+local function SetIndicatorColor(indicator, color)
+    if color then
+        indicator:SetText(color .. "●|r")
+        indicator:Show()
+    else
+        indicator:Hide()
+    end
+end
+
+local function GetSpellRange(spellID, unit)
+    if type(C_Spell) == "table" and type(C_Spell.IsSpellInRange) == "function" then
+        local ok, inRange = pcall(C_Spell.IsSpellInRange, spellID, unit)
+        if not ok then return nil end
+        if inRange == true or inRange == 1 then return true end
+        if inRange == false or inRange == 0 then return false end
+        return nil
+    end
+    if type(IsSpellInRange) ~= "function" or type(GetSpellInfo) ~= "function" then return nil end
+    local spellName = GetSpellInfo(spellID)
+    if not spellName then return nil end
+    local ok, inRange = pcall(IsSpellInRange, spellName, unit)
+    if not ok then return nil end
+    if inRange == 1 or inRange == true then return true end
+    if inRange == 0 or inRange == false then return false end
+    return nil
+end
+
+local function EnsureNameplateIndicator(unit)
+    if type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then
+        return nil
+    end
+    local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+    if not ok or not plate or not plate.UnitFrame then return nil end
+    local unitFrame = plate.UnitFrame
+    local name = unitFrame.name or unitFrame.Name
+    if not name or type(unitFrame.CreateFontString) ~= "function" then return nil end
+
+    local entry = unitFrame.simpleTweaksRangeIndicator
+    local needsAnchor = false
+    if not entry then
+        local indicator = unitFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        if name.GetFontObject and name:GetFontObject() then
+            indicator:SetFontObject(name:GetFontObject())
+        end
+        indicator:SetText("●")
+        entry = { indicator = indicator, name = name }
+        unitFrame.simpleTweaksRangeIndicator = entry
+        needsAnchor = true
+    elseif entry.name ~= name then
+        entry.indicator:ClearAllPoints()
+        entry.name = name
+        if name.GetFontObject and name:GetFontObject() then
+            entry.indicator:SetFontObject(name:GetFontObject())
+        end
+        needsAnchor = true
+    end
+    if needsAnchor then
+        entry.indicator:SetPoint("RIGHT", name, "LEFT", -3, 0)
+    end
+    nameplateIndicators[unit] = entry
+    return entry.indicator
+end
+
+local function UpdateNameplateIndicator(unit)
+    if type(UnitClass) ~= "function" then return end
+    local _, class = UnitClass("player")
+    if class ~= "HUNTER" then return end
+    local indicator = EnsureNameplateIndicator(unit)
+    if not indicator then return end
+    if not IsEnabled("hunterRangeIndicator") or type(UnitCanAttack) ~= "function" or not UnitCanAttack("player", unit) then
+        SetIndicatorColor(indicator, nil)
+        return
+    end
+
+    -- Raptor Strike marks melee range; Arcane Shot marks the hunter's ranged
+    -- range. Unknown results stay hidden instead of implying a wrong distance.
+    local meleeRange = GetSpellRange(2973, unit)
+    local rangedRange = GetSpellRange(3044, unit)
+    if meleeRange == true then
+        SetIndicatorColor(indicator, "|cffffa500")
+    elseif rangedRange == true then
+        SetIndicatorColor(indicator, "|cff00ff00")
+    elseif meleeRange == false and rangedRange == false then
+        SetIndicatorColor(indicator, "|cffff0000")
+    else
+        SetIndicatorColor(indicator, nil)
+    end
+end
+
+local function SetNameplateIndicatorEnabled(enabled)
+    if not enabled then
+        for _, entry in pairs(nameplateIndicators) do
+            SetIndicatorColor(entry.indicator, nil)
+        end
+        return
+    end
+    if type(UnitClass) ~= "function" then return end
+    local _, class = UnitClass("player")
+    if class ~= "HUNTER" then return end
+    for unit in pairs(activeNameplateUnits) do UpdateNameplateIndicator(unit) end
+end
+
 local function SetOption(setting, enabled)
     SimpleTweaksDB[setting] = enabled
 
@@ -90,9 +182,15 @@ local function SetOption(setting, enabled)
         UpdateMapFade(enabled)
     elseif setting == "hideMacroNames" then
         RefreshMacroNames()
+    elseif setting == "hunterRangeIndicator" then
+        SetNameplateIndicatorEnabled(enabled)
     end
-
-    Print((setting == "disableMapFade" and "Karten-Ausblenden" or "Makronamen") .. (enabled and (setting == "disableMapFade" and " deaktiviert." or " ausgeblendet.") or " wiederhergestellt."))
+    local messages = {
+        disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
+        hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
+        hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
+    }
+    Print(messages[setting] or "Einstellung geändert.")
     if optionChecks[setting] then optionChecks[setting]:SetChecked(enabled) end
 end
 
@@ -101,7 +199,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(720, 520)
+    window:SetSize(470, 280)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -122,53 +220,8 @@ local function CreateOptionsWindow()
     close:SetPoint("TOPRIGHT", -5, -5)
     close:SetScript("OnClick", function() window:Hide() end)
 
-    local pages = {}
-    local navButtons = {}
-    local LoadCVars, RefreshGraphics
-    local function NewPage(name)
-        local page = CreateFrame("Frame", nil, window)
-        page:SetPoint("TOPLEFT", 188, -66)
-        page:SetPoint("BOTTOMRIGHT", -20, 20)
-        page:Hide()
-        pages[name] = page
-        return page
-    end
-    local function ShowPage(name)
-        for _, page in pairs(pages) do page:Hide() end
-        pages[name]:Show()
-        for buttonName, button in pairs(navButtons) do
-            button:SetEnabled(buttonName ~= name)
-        end
-        if name == "cvars" and LoadCVars then LoadCVars() end
-        if name == "graphics" and RefreshGraphics then RefreshGraphics() end
-    end
-    local sidebar = CreateFrame("Frame", nil, window, "BackdropTemplate")
-    sidebar:SetPoint("TOPLEFT", 16, -62)
-    sidebar:SetPoint("BOTTOMLEFT", 16, 18)
-    sidebar:SetWidth(154)
-    sidebar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    sidebar:SetBackdropColor(0.035, 0.025, 0.018, 0.95)
-    sidebar:SetBackdropBorderColor(0.52, 0.3, 0.12, 1)
-    local sidebarTitle = sidebar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sidebarTitle:SetPoint("TOPLEFT", 12, -12)
-    sidebarTitle:SetText("|cffffd27fKategorien|r")
-    local function SidebarButton(label, y, page)
-        local button = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
-        button:SetSize(138, 32)
-        button:SetPoint("TOPLEFT", sidebar, 8, y)
-        button:SetText(label)
-        button:SetScript("OnClick", function() ShowPage(page) end)
-        navButtons[page] = button
-    end
-    local mainPage = NewPage("main")
-    local cvarPage = NewPage("cvars")
-    local graphicsPage = NewPage("graphics")
-    SidebarButton("Allgemein", -42, "main")
-    SidebarButton("CVar-Browser", -82, "cvars")
-    SidebarButton("Grafik", -122, "graphics")
-
     local function AddOption(key, label, y)
-        local check = CreateFrame("CheckButton", nil, mainPage, "UICheckButtonTemplate")
+        local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
         check:SetPoint("TOPLEFT", 28, y)
         check:SetChecked(IsEnabled(key))
         check.Text:SetText(label)
@@ -176,154 +229,10 @@ local function CreateOptionsWindow()
         check:SetScript("OnClick", function(self) SetOption(key, self:GetChecked()) end)
         optionChecks[key] = check
     end
+
     AddOption("disableMapFade", "Karte beim Bewegen nicht ausblenden", -68)
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
-
-    local search = CreateFrame("EditBox", nil, cvarPage, "InputBoxTemplate")
-    search:SetSize(300, 26); search:SetPoint("TOPLEFT", 8, -8); search:SetAutoFocus(false)
-    search:SetTextInsets(6, 6, 0, 0)
-    local results = CreateFrame("Frame", nil, cvarPage)
-    results:SetPoint("TOPLEFT", search, "BOTTOMLEFT", 0, -10); results:SetSize(520, 330)
-    local scroll = CreateFrame("ScrollFrame", nil, results, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT"); scroll:SetPoint("BOTTOMRIGHT", -26, 0)
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(490, 1); scroll:SetScrollChild(content)
-    local resultHint = results:CreateFontString(nil, "OVERLAY", "GameFontDisable")
-    resultHint:SetPoint("TOPLEFT", 4, -4)
-    local function RefreshCVarSearch()
-        for _, row in ipairs(cvarRows) do row:Hide() end
-        local query = (search:GetText() or ""):lower()
-        local y, shown = 0, 0
-        for _, item in ipairs(cvarNames) do
-            local name = item.name
-            if query == "" or name:lower():find(query, 1, true) or (item.description and item.description:lower():find(query, 1, true)) then
-                shown = shown + 1
-                local row = cvarRows[shown]
-                if not row then
-                    row = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-                    row:SetSize(460, 24)
-                    row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                    row.value:SetPoint("RIGHT", -8, 0)
-                    row.value:SetJustifyH("RIGHT")
-                    cvarRows[shown] = row
-                end
-                row:SetPoint("TOPLEFT", 0, -y)
-                row:SetText(name .. (item.isCVar and "  |cffb18a5a[CVar]|r" or ""))
-                row.value:SetText(item.isCVar and tostring(GetCVar(name) or "") or "")
-                row:SetEnabled(item.isCVar)
-                row:SetScript("OnClick", function()
-                    if not item.isCVar then return end
-                    local cvarName = item.name
-                    local current = tostring(GetCVar(cvarName) or "")
-                    StaticPopup_Show("SIMPLETWEAKS_CVAR", cvarName, current, { name = cvarName, current = current })
-                end)
-                row:Show(); y = y + 27
-            end
-        end
-        content:SetHeight(math.max(y, 1))
-        resultHint:SetText(shown == 0 and (query == "" and "Keine CVars verfügbar." or "Keine Treffer.") or "")
-    end
-    search:SetScript("OnTextChanged", RefreshCVarSearch)
-    StaticPopupDialogs.SIMPLETWEAKS_CVAR = {
-        text = "Wert für %s eingeben (aktuell: %s)", button1 = ACCEPT, button2 = CANCEL,
-        hasEditBox = true, whileDead = true, hideOnEscape = true,
-        OnShow = function(self, data)
-            local popupData = data or self.data
-            self.data = popupData
-            self.editBox:SetText(popupData and popupData.current or "")
-            self.editBox:HighlightText()
-        end,
-        OnAccept = function(self)
-            local data, value = self.data, self.editBox:GetText()
-            if data and data.name and value ~= "" then
-                local ok, err = SetCVarChecked(data.name, value)
-                if not ok then Print("CVar " .. data.name .. ": " .. err) end
-            end
-            RefreshCVarSearch()
-        end,
-        EditBoxOnEnterPressed = function(self) self:GetParent().button1:Click() end,
-    }
-    LoadCVars = function()
-        wipe(cvarNames)
-        -- WoW Forever exposes the console list as a global function. Retail's
-        -- C_Console namespace is absent in this client.
-        local getCommands = ConsoleGetAllCommands
-        if type(getCommands) == "function" then
-            local ok, commands = pcall(getCommands)
-            if ok and type(commands) == "table" then
-                for _, command in ipairs(commands) do
-                    if type(command) == "table" then
-                        local name = command.command or command.name
-                        if type(name) == "string" and name ~= "" then
-                            local value = GetCVar(name)
-                            table.insert(cvarNames, {
-                                name = name,
-                                description = command.help or command.helpText or command.description or "",
-                                isCVar = value ~= nil,
-                            })
-                        end
-                    end
-                end
-            end
-        end
-        table.sort(cvarNames, function(a, b) return a.name:lower() < b.name:lower() end)
-        RefreshCVarSearch()
-    end
-
-    local rangeNote = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    rangeNote:SetPoint("TOPLEFT", 8, -4)
-    rangeNote:SetWidth(480)
-    rangeNote:SetJustifyH("LEFT")
-    rangeNote:SetText("Hinweis: Obergrenzen sind teilweise nicht für WoW Forever verifiziert.")
-
-    local settings = {
-        {"groundEffectDensity", "Grasdichte (Obergrenze nicht für Forever verifiziert)", 0, 256, 256},
-        {"groundEffectDist", "Sichtweite für Gras (allgemeiner Maximalwert 600; Forever ungeprüft)", 0, 600, 600},
-        {"graphicsGroundClutter", "Bodendetails (allgemeiner Reglerbereich 0–9; Forever ungeprüft)", 0, 9, 9},
-        {"graphicsViewDistance", "Sichtweite (Obergrenze nicht für Forever verifiziert)", 1, 9, 9},
-        {"graphicsLightMode", "Sekundäre Beleuchtung (Obergrenze nicht verifiziert)", 0, 3, 3},
-        {"sunshafts", "Sonnenstrahlen (Obergrenze nicht verifiziert)", 0, 2, 2},
-        {"shadowNumCascades", "Fernschatten (Obergrenze nicht für Forever verifiziert)", 0, 4, 4},
-    }
-    for index, info in ipairs(settings) do
-        local settingInfo = info
-        local label = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        label:SetPoint("TOPLEFT", 8, -30 - (index - 1) * 52); label:SetText(info[2])
-        local current = graphicsPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        current:SetPoint("LEFT", label, "RIGHT", 10, 0)
-        local slider = CreateFrame("Slider", nil, graphicsPage, "OptionsSliderTemplate")
-        slider:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4); slider:SetWidth(400)
-        slider:SetMinMaxValues(settingInfo[3], settingInfo[4]); slider:SetValueStep(1); slider:SetObeyStepOnDrag(true)
-        slider.Low:SetText(tostring(settingInfo[3])); slider.High:SetText(tostring(settingInfo[4]))
-        local available = GetCVar(settingInfo[1]) ~= nil
-        slider:SetEnabled(available)
-        slider:SetScript("OnValueChanged", function(self, value)
-            if graphicsRefreshing then return end
-            local rounded = math.floor(value + 0.5)
-            local ok, err = SetCVarChecked(settingInfo[1], tostring(rounded))
-            if not ok then Print(settingInfo[1] .. ": " .. err); RefreshGraphics() end
-            current:SetText(tostring(GetCVar(settingInfo[1]) or "Nicht verfügbar"))
-        end)
-        slider.cvarName, slider.minValue = settingInfo[1], settingInfo[3]
-        slider.currentText, slider.label = current, label
-        if not available then label:SetText(info[2] .. " (nicht verfügbar)") end
-    end
-    RefreshGraphics = function()
-        graphicsRefreshing = true
-        for _, child in ipairs({ graphicsPage:GetChildren() }) do
-            if child.cvarName then
-                local value = GetCVar(child.cvarName)
-                local number = tonumber(value)
-                child:SetEnabled(value ~= nil)
-                child.currentText:SetText(value and ("Aktuell: " .. tostring(value)) or "Nicht verfügbar")
-                if value then child:SetValue(number or child.minValue) end
-                child.label:SetText(child.label:GetText():gsub(" %(nicht verfügbar%)$", ""))
-                if not value then child.label:SetText(child.label:GetText() .. " (nicht verfügbar)") end
-            end
-        end
-        graphicsRefreshing = false
-    end
-    ShowPage("main")
+    AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
     return window
 end
 
@@ -364,7 +273,19 @@ SlashCmdList.SIMPLETWEAKS = HandleSlashCommand
 
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
+pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_ADDED")
+pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_REMOVED")
 frame:SetScript("OnEvent", function(_, event, loadedAddon)
+    if event == "NAME_PLATE_UNIT_ADDED" then
+        activeNameplateUnits[loadedAddon] = true
+        if IsEnabled("hunterRangeIndicator") then UpdateNameplateIndicator(loadedAddon) end
+        return
+    elseif event == "NAME_PLATE_UNIT_REMOVED" then
+        activeNameplateUnits[loadedAddon] = nil
+        local entry = nameplateIndicators[loadedAddon]
+        if entry then SetIndicatorColor(entry.indicator, nil) end
+        return
+    end
     if event ~= "ADDON_LOADED" or loadedAddon ~= addonName then
         return
     end
@@ -380,10 +301,21 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         UpdateMapFade(true)
     end
 
+    if IsEnabled("hunterRangeIndicator") then
+        SetNameplateIndicatorEnabled(true)
+    end
+
     RefreshMacroNames()
     if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
         AddonCompartmentFrame:RegisterAddon({ text = "SimpleTweaks", icon = "Interface\\Icons\\INV_Misc_Gear_01", notCheckable = true, func = OpenOptions })
     end
     Print("Geladen. /tweaks öffnet die Einstellungen.")
     frame:UnregisterEvent("ADDON_LOADED")
+end)
+frame:SetScript("OnUpdate", function(_, elapsed)
+    if not IsEnabled("hunterRangeIndicator") then return end
+    rangeUpdateElapsed = rangeUpdateElapsed + elapsed
+    if rangeUpdateElapsed < 0.2 then return end
+    rangeUpdateElapsed = 0
+    SetNameplateIndicatorEnabled(true)
 end)

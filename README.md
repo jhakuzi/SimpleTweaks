@@ -4,10 +4,9 @@ Ein kleines Addon für World of Warcraft: Forever mit einem bronzefarbenen Einst
 
 - Die Weltkarte beim Bewegen sichtbar halten.
 - Makronamen auf den Blizzard-Aktionsleisten ausblenden.
-- Eine durchsuchbare Liste der vom Client gemeldeten Konsolenbefehle; CVar-Einträge lassen sich anklicken und bearbeiten.
-- Eine Grafikseite mit Reglern für Gras, Sichtweite, Beleuchtung, Sonnenstrahlen und Schatten.
+- Einen Reichweitenpunkt an gegnerischen Namensplaketten für Jäger anzeigen.
 
-Beide Funktionen sind standardmäßig aktiv und werden gespeichert.
+Die Karten- und Makro-Funktionen sind standardmäßig aktiv; der Reichweitenindikator ist standardmäßig ausgeschaltet. Einstellungen werden gespeichert.
 
 ## Install
 
@@ -21,8 +20,5 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 
 - `/tweaks karte an|aus` schaltet das Ausblenden der Karte um.
 - `/tweaks makros an|aus` schaltet das Ausblenden der Makronamen um.
-- Die Checkboxen im Fenster übernehmen Änderungen sofort.
-- Im **CVar-Browser** kannst du Konsolenbefehle nach Namen oder Beschreibung durchsuchen. Erkennbare CVars zeigen ihren aktuellen Wert und lassen sich per Klick bearbeiten.
-- **Grafik** enthält Regler für `groundEffectDensity`, `groundEffectDist`, `graphicsGroundClutter`, `graphicsViewDistance`, `graphicsLightMode`, `sunshafts` und `shadowNumCascades`.
-
-Die Grafikregler verwenden praktische Wertebereiche. Für `groundEffectDist` ist 600 als allgemeiner Maximalwert dokumentiert, für `graphicsGroundClutter` ist der allgemeine Reglerbereich 0–9 dokumentiert. Diese Grenzen sind nicht eigens im WoW-Forever-Client verifiziert. Auch die übrigen Reglerobergrenzen sind im Client nicht verifiziert; die angezeigten Grenzen sind keine Zusicherung der tatsächlichen Engine-Maxima.
+- Das Einstellungsfenster enthält nur die Checkboxen der drei Funktionen und übernimmt Änderungen sofort.
+- **Jäger Reichweitenindikator** zeigt links neben gegnerischen Namensplaketten einen Punkt: Rot außerhalb der Reichweite, Orange in Nahkampfreichweite und Grün in Fernkampfreichweite. Die Reichweite wird anhand von Raptor Strike und Arcane Shot geprüft; wenn der Client keinen eindeutigen Wert liefert, bleibt der Punkt verborgen.
