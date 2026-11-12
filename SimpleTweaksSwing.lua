@@ -283,6 +283,7 @@ local function ApplyCircleGeometry()
     else
         pieHolder:SetPoint("CENTER", display, "CENTER", 0, 0)
     end
+    pieHolder:SetFrameLevel(display:GetFrameLevel() + 2)
     circleBorder:ClearAllPoints()
     circleBorder:SetSize(size, size)
     circleBorder:SetPoint("CENTER", pieHolder, "CENTER", 0, 0)
@@ -438,6 +439,7 @@ local function UpdatePie(progress)
     end
     local count = math.floor(shown * PIE_SLICES + 0.001)
     local lead = (grow and shown or progress) * math.pi * 2
+    local drawn = 0
     for i = 1, PIE_SLICES do
         local line = pieLines[i]
         local visible = grow and i <= count or (not grow and i > PIE_SLICES - count)
@@ -445,23 +447,41 @@ local function UpdatePie(progress)
             line:Hide()
         else
             local angle = ((i - 0.5) / PIE_SLICES) * math.pi * 2
-            line:SetThickness(slice)
-            line:SetColorTexture(r, g, b, alpha)
-            line:SetStartPoint("CENTER", pieHolder, "CENTER", 0, 0)
-            line:SetEndPoint("CENTER", pieHolder, "CENTER", math.sin(angle) * radius, math.cos(angle) * radius)
-            line:Show()
+            local ok = pcall(function()
+                line:SetThickness(slice)
+                line:SetColorTexture(r, g, b, alpha)
+                line:SetStartPoint("CENTER", pieHolder, 0, 0)
+                line:SetEndPoint("CENTER", pieHolder, math.sin(angle) * radius, math.cos(angle) * radius)
+                line:Show()
+            end)
+            if ok then
+                drawn = drawn + 1
+            else
+                line:Hide()
+            end
         end
     end
-    if edgeLine and SparkOn() and progress > 0.001 and progress < 0.999 and shown > 0.002 then
-        edgeLine:SetThickness(math.max(2, slice))
-        edgeLine:SetColorTexture(1, 0.96, 0.85, 1)
-        edgeLine:SetStartPoint("CENTER", pieHolder, "CENTER", 0, 0)
-        edgeLine:SetEndPoint("CENTER", pieHolder, "CENTER", math.sin(lead) * radius, math.cos(lead) * radius)
-        edgeLine:Show()
+    local edgeOk = false
+    if edgeLine and progress > 0.001 and progress < 0.999 and shown > 0.002 then
+        local thickness = SparkOn() and math.max(2, slice) or math.max(1, slice * 0.45)
+        local er, eg, eb, ea = r, g, b, 1
+        if SparkOn() then
+            er, eg, eb, ea = 1, 0.96, 0.85, 1
+        end
+        edgeOk = pcall(function()
+            edgeLine:SetThickness(thickness)
+            edgeLine:SetColorTexture(er, eg, eb, ea)
+            edgeLine:SetStartPoint("CENTER", pieHolder, 0, 0)
+            edgeLine:SetEndPoint("CENTER", pieHolder, math.sin(lead) * radius, math.cos(lead) * radius)
+            edgeLine:Show()
+        end)
+        if not edgeOk then
+            edgeLine:Hide()
+        end
     elseif edgeLine then
         edgeLine:Hide()
     end
-    return true
+    return drawn > 0 or edgeOk
 end
 
 local function ShowCircle(startTime, duration, progress)
