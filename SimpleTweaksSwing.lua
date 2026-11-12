@@ -125,10 +125,13 @@ end
 
 local circleBorder
 local circleFill
-local circlePie
+local pieAnchor
+local pieLines
+local edgeLine
 local pieStamp
 local sampleStart
 local editCallbacks = false
+local PIE_SLICES = 48
 
 local function AddCircleMask(owner, texture)
     if not texture or type(texture.AddMaskTexture) ~= "function" or type(owner.CreateMaskTexture) ~= "function" then
@@ -165,30 +168,24 @@ local function EnsureCircle()
     AddCircleMask(display, circleBorder)
     circleBorder:Hide()
 
-    circleFill = display:CreateTexture(nil, "ARTWORK", nil, 1)
+    circleFill = display:CreateTexture(nil, "BACKGROUND", nil, 1)
     circleFill:SetTexture("Interface\\Buttons\\WHITE8X8")
     AddCircleMask(display, circleFill)
     circleFill:Hide()
 
-    local pie = CreateFrame("Cooldown", nil, display)
-    if pie and pie.SetCooldown then
-        circlePie = pie
-        pie.noCooldownCount = true
-        if pie.SetDrawBling then
-            pcall(pie.SetDrawBling, pie, false)
-        end
-        if pie.SetDrawSwipe then
-            pcall(pie.SetDrawSwipe, pie, true)
-        end
-        if pie.SetHideCountdownNumbers then
-            pcall(pie.SetHideCountdownNumbers, pie, true)
-        end
-        if pie.SetUseCircularEdge then
-            pcall(pie.SetUseCircularEdge, pie, true)
-        end
-        IgnoreMouse(pie)
-        pie:Hide()
+    pieAnchor = CreateFrame("Frame", nil, display)
+    pieAnchor:EnableMouse(false)
+    pieLines = {}
+    if not pieAnchor.CreateLine then
+        return
     end
+    for i = 1, PIE_SLICES do
+        local line = pieAnchor:CreateLine(nil, "OVERLAY")
+        line:Hide()
+        pieLines[i] = line
+    end
+    edgeLine = pieAnchor:CreateLine(nil, "OVERLAY", nil, 7)
+    edgeLine:Hide()
 end
 
 local function ApplyCircleGeometry()
@@ -217,26 +214,28 @@ local function ApplyCircleGeometry()
     circleFill:ClearAllPoints()
     circleFill:SetSize(inner, inner)
     circleFill:SetPoint("CENTER", circleBorder, "CENTER")
-    if circlePie then
-        circlePie:ClearAllPoints()
-        circlePie:SetSize(inner, inner)
-        circlePie:SetPoint("CENTER", circleBorder, "CENTER")
-        if circlePie.SetEdgeScale then
-            local scale = inner / 36
-            if scale < 0.25 then
-                scale = 0.25
-            elseif scale > 1.5 then
-                scale = 1.5
-            end
-            pcall(circlePie.SetEdgeScale, circlePie, scale)
+    if pieAnchor then
+        pieAnchor:ClearAllPoints()
+        pieAnchor:SetSize(inner, inner)
+        if editing then
+            pieAnchor:SetPoint("TOP", display, "TOP", 0, -(size - inner) / 2)
+        else
+            pieAnchor:SetPoint("CENTER", display, "CENTER", 0, 0)
         end
     end
     if selection and selection.SetFrameLevel then
-        local level = display:GetFrameLevel()
-        if circlePie and circlePie.SetFrameLevel then
-            circlePie:SetFrameLevel(level + 2)
+        selection:SetFrameLevel(display:GetFrameLevel() + 8)
+    end
+end
+
+local function HidePieLines()
+    if pieLines then
+        for i = 1, #pieLines do
+            pieLines[i]:Hide()
         end
-        selection:SetFrameLevel(level + 8)
+    end
+    if edgeLine then
+        edgeLine:Hide()
     end
 end
 
@@ -247,30 +246,62 @@ local function HideCircle()
     if circleFill then
         circleFill:Hide()
     end
-    if circlePie then
-        circlePie:Hide()
-        if circlePie.Clear then
-            pcall(circlePie.Clear, circlePie)
-        end
+    HidePieLines()
+    if pieAnchor then
+        pieAnchor:Hide()
     end
     pieStamp = nil
 end
 
-local function ApplySwipeColor(pie, r, g, b, a)
-    a = a or 1
-    if pie.SetSwipeColorRGBA and pcall(pie.SetSwipeColorRGBA, pie, r, g, b, a) then
+local function UpdatePie(progress)
+    if not pieLines or not pieLines[1] then
         return
     end
-    if CreateColor then
-        local color = CreateColor(r, g, b, a)
-        if pcall(pie.SetSwipeColor, pie, color, a) then
-            return
-        end
-        if pcall(pie.SetSwipeColor, pie, color) then
-            return
+    local size = CircleSize()
+    local band = math.max(1, math.floor(size / 9 + 0.5))
+    local radius = math.max(1, (size - band * 2) / 2 - 0.25)
+    local slice = math.max(1.25, (radius * 2 * math.pi / PIE_SLICES) + 0.75)
+    local alpha = 0.5 + 0.5 * progress
+    local r, g, b = CircleColor()
+    local grow = PieFills()
+    local shown = grow and progress or (1 - progress)
+    if shown < 0 then
+        shown = 0
+    elseif shown > 1 then
+        shown = 1
+    end
+    local count = math.floor(shown * PIE_SLICES + 0.001)
+    local lead = progress * math.pi * 2
+    for i = 1, PIE_SLICES do
+        local line = pieLines[i]
+        local visible = grow and i <= count or (not grow and i > PIE_SLICES - count)
+        if not visible then
+            line:Hide()
+        else
+            local angle = ((i - 0.5) / PIE_SLICES) * math.pi * 2
+            line:SetThickness(slice)
+            line:SetColorTexture(r, g, b, alpha)
+            line:SetStartPoint("CENTER", pieAnchor, "CENTER", 0, 0)
+            line:SetEndPoint("CENTER", pieAnchor, "CENTER", math.sin(angle) * radius, math.cos(angle) * radius)
+            line:Show()
         end
     end
-    pcall(pie.SetSwipeColor, pie, r, g, b, a)
+    if edgeLine and progress > 0.001 and progress < 0.999 then
+        local dx = math.sin(lead) * radius
+        local dy = math.cos(lead) * radius
+        if SparkOn() then
+            edgeLine:SetThickness(math.max(2, slice))
+            edgeLine:SetColorTexture(1, 0.96, 0.85, 1)
+        else
+            edgeLine:SetThickness(math.max(1, slice * 0.45))
+            edgeLine:SetColorTexture(r, g, b, 1)
+        end
+        edgeLine:SetStartPoint("CENTER", pieAnchor, "CENTER", 0, 0)
+        edgeLine:SetEndPoint("CENTER", pieAnchor, "CENTER", dx, dy)
+        edgeLine:Show()
+    elseif edgeLine then
+        edgeLine:Hide()
+    end
 end
 
 local function ShowCircle(startTime, duration, progress)
@@ -282,34 +313,16 @@ local function ShowCircle(startTime, duration, progress)
     elseif progress > 1 then
         progress = 1
     end
-    local alpha = 0.5 + 0.5 * progress
     local r, g, b = CircleColor()
     local br, bg, bb = BorderColor()
     circleBorder:SetColorTexture(br, bg, bb, 1)
     circleBorder:Show()
-    circleFill:SetColorTexture(r, g, b, alpha)
+    circleFill:SetColorTexture(r, g, b, 0.16)
     circleFill:Show()
-    if not circlePie or not PlainNumber(startTime) or not PlainNumber(duration) or duration <= 0 then
-        return
+    if pieAnchor then
+        pieAnchor:Show()
     end
-    circlePie:Show()
-    if circlePie.SetDrawSwipe then
-        circlePie:SetDrawSwipe(true)
-    end
-    if circlePie.SetDrawEdge then
-        circlePie:SetDrawEdge(SparkOn())
-    end
-    local reverse = not PieFills()
-    local stamp = math.floor(startTime * 20) .. ":" .. math.floor(duration * 20) .. ":" .. (reverse and "1" or "0") .. ":" .. (SparkOn() and "1" or "0")
-    if pieStamp ~= stamp then
-        pieStamp = stamp
-        if circlePie.SetReverse then
-            circlePie:SetReverse(reverse)
-        end
-        pcall(circlePie.SetCooldown, circlePie, startTime, duration)
-    end
-    circleBorder:SetColorTexture(br, bg, bb, 1)
-    ApplySwipeColor(circlePie, br, bg, bb, 1)
+    UpdatePie(progress)
 end
 
 local function FontSize()
@@ -786,7 +799,7 @@ driver:SetScript("OnUpdate", function(_, elapsed)
         return
     end
     refreshElapsed = refreshElapsed + elapsed
-    if refreshElapsed < 0.05 then
+    if refreshElapsed < 0.02 then
         return
     end
     refreshElapsed = 0
