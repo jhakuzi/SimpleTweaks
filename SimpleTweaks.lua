@@ -11,6 +11,7 @@ local nameplateIndicators = {}
 local activeNameplateUnits = {}
 local rangeUpdateElapsed = 0
 local meleeRangeItems = { 8149, 136605, 63427 }
+local currentTargetUnit
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cffd6a45eSimpleTweaks:|r " .. message)
@@ -76,7 +77,13 @@ end
 
 local function SetIndicatorColor(indicator, color)
     if color then
-        indicator:SetText(color .. "●|r")
+        if color == "orange" then
+            indicator:SetColorTexture(1, 0.65, 0, 1)
+        elseif color == "green" then
+            indicator:SetColorTexture(0, 1, 0, 1)
+        elseif color == "red" then
+            indicator:SetColorTexture(1, 0, 0, 1)
+        end
         indicator:Show()
     else
         indicator:Hide()
@@ -124,36 +131,44 @@ local function EnsureNameplateIndicator(unit)
     local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
     if not ok or not plate or not plate.UnitFrame then return nil end
     local unitFrame = plate.UnitFrame
-    local name = unitFrame.name or unitFrame.Name
-    if not name or type(unitFrame.CreateFontString) ~= "function" then return nil end
+    local healthBarContainer = unitFrame.HealthBarsContainer
+    local healthBar = healthBarContainer and healthBarContainer.healthBar
+    if not healthBar or type(unitFrame.CreateTexture) ~= "function" then return nil end
 
     local entry = unitFrame.simpleTweaksRangeIndicator
     local needsAnchor = false
     if not entry then
-        local indicator = unitFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        if name.GetFontObject and name:GetFontObject() then
-            indicator:SetFontObject(name:GetFontObject())
+        local indicator = unitFrame:CreateTexture(nil, "OVERLAY")
+        indicator:SetTexture("Interface\\Buttons\\WHITE8X8")
+        indicator:SetSize(7, 7)
+        local mask
+        if type(unitFrame.CreateMaskTexture) == "function" then
+            mask = unitFrame:CreateMaskTexture(nil, "OVERLAY")
+            mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(indicator)
+            indicator:AddMaskTexture(mask)
         end
-        indicator:SetText("●")
-        entry = { indicator = indicator, name = name }
+        entry = { indicator = indicator, mask = mask, healthBar = healthBar }
         unitFrame.simpleTweaksRangeIndicator = entry
         needsAnchor = true
-    elseif entry.name ~= name then
+    elseif entry.healthBar ~= healthBar then
         entry.indicator:ClearAllPoints()
-        entry.name = name
-        if name.GetFontObject and name:GetFontObject() then
-            entry.indicator:SetFontObject(name:GetFontObject())
-        end
+        entry.healthBar = healthBar
         needsAnchor = true
     end
     if needsAnchor then
-        entry.indicator:SetPoint("RIGHT", name, "LEFT", -3, 0)
+        entry.indicator:SetPoint("RIGHT", healthBar, "LEFT", -4, 0)
     end
     nameplateIndicators[unit] = entry
     return entry.indicator
 end
 
 local function UpdateNameplateIndicator(unit)
+    if not currentTargetUnit or unit ~= currentTargetUnit or not UnitIsUnit(unit, "target") then
+        local oldEntry = nameplateIndicators[unit]
+        if oldEntry then SetIndicatorColor(oldEntry.indicator, nil) end
+        return
+    end
     if type(UnitClass) ~= "function" then return end
     local _, class = UnitClass("player")
     if class ~= "HUNTER" then return end
@@ -171,11 +186,11 @@ local function UpdateNameplateIndicator(unit)
     local meleeRange = GetMeleeRange(unit)
     local rangedRange = GetSpellRange(75, unit)
     if meleeRange == true then
-        SetIndicatorColor(indicator, "|cffffa500")
+        SetIndicatorColor(indicator, "orange")
     elseif rangedRange == true then
-        SetIndicatorColor(indicator, "|cff00ff00")
+        SetIndicatorColor(indicator, "green")
     elseif rangedRange == false and meleeRange == false then
-        SetIndicatorColor(indicator, "|cffff0000")
+        SetIndicatorColor(indicator, "red")
     else
         SetIndicatorColor(indicator, nil)
     end
@@ -190,8 +205,34 @@ local function SetNameplateIndicatorEnabled(enabled)
     end
     if type(UnitClass) ~= "function" then return end
     local _, class = UnitClass("player")
-    if class ~= "HUNTER" then return end
-    for unit in pairs(activeNameplateUnits) do UpdateNameplateIndicator(unit) end
+    if class ~= "HUNTER" then
+        for _, entry in pairs(nameplateIndicators) do SetIndicatorColor(entry.indicator, nil) end
+        return
+    end
+
+    -- Find the target token without querying range for other visible units.
+    local targetUnit
+    if UnitExists("target") and UnitCanAttack("player", "target") then
+        for unit in pairs(activeNameplateUnits) do
+            if UnitIsUnit(unit, "target") then
+                targetUnit = unit
+                break
+            end
+        end
+    end
+
+    if currentTargetUnit ~= targetUnit then
+        if currentTargetUnit and nameplateIndicators[currentTargetUnit] then
+            SetIndicatorColor(nameplateIndicators[currentTargetUnit].indicator, nil)
+        end
+        currentTargetUnit = targetUnit
+    end
+    if not targetUnit then
+        for _, entry in pairs(nameplateIndicators) do SetIndicatorColor(entry.indicator, nil) end
+        return
+    end
+    -- Only this token reaches spell/item range APIs.
+    UpdateNameplateIndicator(targetUnit)
 end
 
 local function SetOption(setting, enabled)
@@ -294,15 +335,22 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_ADDED")
 pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_REMOVED")
+pcall(frame.RegisterEvent, frame, "PLAYER_TARGET_CHANGED")
 frame:SetScript("OnEvent", function(_, event, loadedAddon)
     if event == "NAME_PLATE_UNIT_ADDED" then
         activeNameplateUnits[loadedAddon] = true
-        if IsEnabled("hunterRangeIndicator") then UpdateNameplateIndicator(loadedAddon) end
+        if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
         return
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         activeNameplateUnits[loadedAddon] = nil
         local entry = nameplateIndicators[loadedAddon]
         if entry then SetIndicatorColor(entry.indicator, nil) end
+        nameplateIndicators[loadedAddon] = nil
+        if currentTargetUnit == loadedAddon then currentTargetUnit = nil end
+        if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
+        return
+    elseif event == "PLAYER_TARGET_CHANGED" then
+        if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
         return
     end
     if event ~= "ADDON_LOADED" or loadedAddon ~= addonName then
