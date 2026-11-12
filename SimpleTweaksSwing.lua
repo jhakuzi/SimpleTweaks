@@ -44,6 +44,16 @@ local layoutKey = "default"
 local editModeHooked = false
 local refreshElapsed = 0
 local watchElapsed = 0
+local GetTime = GetTime
+local pairs = pairs
+local floor = math.floor
+local max = math.max
+local sin = math.sin
+local cos = math.cos
+local pi = math.pi
+local format = string.format
+local ticking = false
+local OnSwingUpdate
 
 local function PlainNumber(value)
     if type(value) ~= "number" then
@@ -83,7 +93,7 @@ local function DecimalPlaces()
 end
 
 local function FormatRemaining(remain)
-    return string.format("%." .. DecimalPlaces() .. "f", remain)
+    return format("%." .. DecimalPlaces() .. "f", remain)
 end
 
 local CIRCLE_DEFAULT = 9
@@ -279,9 +289,16 @@ local function EnsureCircle()
     end
 end
 
+local geomSize
+local geomEditing
+local RebuildSlices
+
 local function ApplyCircleGeometry()
     EnsureCircle()
     local size = CircleSize()
+    if size == geomSize and editing == geomEditing then
+        return
+    end
     local thickness = math.max(1, math.floor(size / 9 + 0.5))
     local inner = math.max(1, size - thickness * 2)
     local width = size
@@ -316,6 +333,48 @@ local function ApplyCircleGeometry()
     if selection and selection.SetFrameLevel then
         selection:SetFrameLevel(display:GetFrameLevel() + 8)
     end
+    RebuildSlices()
+    geomSize = size
+    geomEditing = editing
+end
+
+local sliceDX = {}
+local sliceDY = {}
+local sliceRadius
+local sliceThickness
+local pointsDirty = true
+local lineShown = {}
+local edgeShown = false
+local lastSpark
+local lastFillR, lastFillG, lastFillB, lastFillA
+local lastEdgeR, lastEdgeG, lastEdgeB, lastEdgeA, lastEdgeThick
+local lastEdgeX, lastEdgeY
+local wedgesCleared = false
+local baseShown = false
+local lastBorderR, lastBorderG, lastBorderB, lastBorderA
+local lastBackR, lastBackG, lastBackB, lastBackA
+local linesBroken = false
+
+function RebuildSlices()
+    local size = CircleSize()
+    local band = max(1, floor(size / 9 + 0.5))
+    local radius = max(1, (size - band * 2) / 2 - 0.25)
+    local slice = max(1.25, (radius * 2 * pi / PIE_SLICES) + 0.75)
+    if radius == sliceRadius and slice == sliceThickness then
+        return
+    end
+    sliceRadius = radius
+    sliceThickness = slice
+    local step = (pi * 2) / PIE_SLICES
+    for i = 1, PIE_SLICES do
+        local angle = (i - 0.5) * step
+        sliceDX[i] = sin(angle) * radius
+        sliceDY[i] = cos(angle) * radius
+    end
+    pointsDirty = true
+    linesBroken = false
+    lastFillA = nil
+    lastEdgeX = nil
 end
 
 local function HideWedges()
@@ -330,13 +389,20 @@ local function HideWedges()
     if sparkDot then
         sparkDot:Hide()
     end
+end
+
+local function HidePieLines()
     if pieLines then
         for i = 1, #pieLines do
-            pieLines[i]:Hide()
+            if lineShown[i] ~= false then
+                pieLines[i]:Hide()
+                lineShown[i] = false
+            end
         end
     end
-    if edgeLine then
+    if edgeLine and edgeShown then
         edgeLine:Hide()
+        edgeShown = false
     end
 end
 
@@ -348,9 +414,12 @@ local function HideCircle()
         circleFill:Hide()
     end
     HideWedges()
+    HidePieLines()
     if pieHolder then
         pieHolder:Hide()
     end
+    baseShown = false
+    wedgesCleared = false
 end
 
 local function PaintWedge(tex, size, angle1, angle2)
@@ -436,15 +505,11 @@ local function ShowSweep(angle1, angle2, r, g, b, alpha)
 end
 
 local function UpdatePie(progress)
-    if not pieLines or not pieLines[1] then
+    if linesBroken or not pieLines or not pieLines[1] or not sliceRadius then
         return false
     end
-    HideWedges()
-    local size = CircleSize()
-    local band = math.max(1, math.floor(size / 9 + 0.5))
-    local radius = math.max(1, (size - band * 2) / 2 - 0.25)
-    local slice = math.max(1.25, (radius * 2 * math.pi / PIE_SLICES) + 0.75)
     local alpha = (0.5 + 0.5 * progress) * CircleAlpha()
+    local alphaQ = floor(alpha * 256 + 0.5)
     local r, g, b = CircleColor()
     local grow = PieFills()
     local shown = grow and progress or (1 - progress)
@@ -453,56 +518,118 @@ local function UpdatePie(progress)
     elseif shown > 1 then
         shown = 1
     end
-    local count = math.floor(shown * PIE_SLICES + 0.001)
-    local lead = (grow and shown or progress) * math.pi * 2
+    local count = floor(shown * PIE_SLICES + 0.001)
+    local colorChanged = r ~= lastFillR or g ~= lastFillG or b ~= lastFillB or alphaQ ~= lastFillA
+    if colorChanged then
+        lastFillR, lastFillG, lastFillB, lastFillA = r, g, b, alphaQ
+    end
+    local spark = SparkOn()
+    if pointsDirty or spark ~= lastSpark then
+        local thick = sliceThickness
+        local placed = true
+        for i = 1, PIE_SLICES do
+            local line = pieLines[i]
+            local ok = pcall(function()
+                if pointsDirty then
+                    line:SetStartPoint("CENTER", pieHolder, 0, 0)
+                    line:SetEndPoint("CENTER", pieHolder, sliceDX[i], sliceDY[i])
+                end
+                if spark ~= lastSpark or pointsDirty then
+                    line:SetThickness(thick)
+                end
+            end)
+            if not ok then
+                placed = false
+                break
+            end
+        end
+        if not placed then
+            linesBroken = true
+            return false
+        end
+        lastSpark = spark
+        lastEdgeThick = edgeThick
+        pointsDirty = false
+        lastEdgeX = nil
+    end
     local drawn = 0
     for i = 1, PIE_SLICES do
         local line = pieLines[i]
         local visible = grow and i <= count or (not grow and i > PIE_SLICES - count)
-        if not visible then
-            line:Hide()
-        else
-            local angle = ((i - 0.5) / PIE_SLICES) * math.pi * 2
-            local ok = pcall(function()
-                line:SetThickness(slice)
+        if visible then
+            if colorChanged or not lineShown[i] then
                 line:SetColorTexture(r, g, b, alpha)
-                line:SetStartPoint("CENTER", pieHolder, 0, 0)
-                line:SetEndPoint("CENTER", pieHolder, math.sin(angle) * radius, math.cos(angle) * radius)
-                line:Show()
-            end)
-            if ok then
-                drawn = drawn + 1
-            else
-                line:Hide()
             end
+            if not lineShown[i] then
+                line:Show()
+                lineShown[i] = true
+            end
+            drawn = drawn + 1
+        elseif lineShown[i] then
+            line:Hide()
+            lineShown[i] = false
         end
     end
     local edgeOk = false
     if edgeLine and progress > 0.001 and progress < 0.999 and shown > 0.002 then
-        local thickness = SparkOn() and math.max(2, slice) or math.max(1, slice * 0.45)
         local er, eg, eb = r, g, b
-        if SparkOn() then
+        if spark then
             er, eg, eb = 1, 0.96, 0.85
         end
         local ea = LineAlpha()
-        edgeOk = pcall(function()
-            edgeLine:SetThickness(thickness)
-            edgeLine:SetColorTexture(er, eg, eb, ea)
-            edgeLine:SetStartPoint("CENTER", pieHolder, 0, 0)
-            edgeLine:SetEndPoint("CENTER", pieHolder, math.sin(lead) * radius, math.cos(lead) * radius)
-            edgeLine:Show()
-        end)
-        if not edgeOk then
-            edgeLine:Hide()
+        local lead = (grow and shown or progress) * pi * 2
+        local edx = sin(lead) * sliceRadius
+        local edy = cos(lead) * sliceRadius
+        local qx = floor(edx * 4 + 0.5)
+        local qy = floor(edy * 4 + 0.5)
+        local wantThick = spark and max(2, sliceThickness) or max(1, sliceThickness * 0.45)
+        local moved = qx ~= lastEdgeX or qy ~= lastEdgeY
+        local recolor = er ~= lastEdgeR or eg ~= lastEdgeG or eb ~= lastEdgeB or ea ~= lastEdgeA or wantThick ~= lastEdgeThick
+        if moved or recolor or not edgeShown then
+            local ok = pcall(function()
+                if not edgeShown then
+                    edgeLine:SetStartPoint("CENTER", pieHolder, 0, 0)
+                end
+                if moved or not edgeShown then
+                    edgeLine:SetEndPoint("CENTER", pieHolder, edx, edy)
+                end
+                if recolor or not edgeShown then
+                    edgeLine:SetThickness(wantThick)
+                    edgeLine:SetColorTexture(er, eg, eb, ea)
+                end
+            end)
+            if ok then
+                lastEdgeX, lastEdgeY = qx, qy
+                lastEdgeR, lastEdgeG, lastEdgeB, lastEdgeA = er, eg, eb, ea
+                lastEdgeThick = wantThick
+                if not edgeShown then
+                    edgeLine:Show()
+                    edgeShown = true
+                end
+                edgeOk = true
+            else
+                edgeLine:Hide()
+                edgeShown = false
+            end
+        else
+            edgeOk = true
         end
-    elseif edgeLine then
+    elseif edgeShown then
         edgeLine:Hide()
+        edgeShown = false
     end
-    return drawn > 0 or edgeOk
+    if drawn > 0 or edgeOk then
+        if not wedgesCleared then
+            HideWedges()
+            wedgesCleared = true
+        end
+        return true
+    end
+    wedgesCleared = false
+    return false
 end
 
 local function ShowCircle(startTime, duration, progress)
-    display:Show()
     EnsureCircle()
     ApplyCircleGeometry()
     if progress < 0 then
@@ -516,11 +643,21 @@ local function ShowCircle(startTime, duration, progress)
     local alpha = (0.5 + 0.5 * progress) * CircleAlpha()
     local grow = PieFills()
     local shown = grow and progress or (1 - progress)
-    circleBorder:SetColorTexture(br, bg, bb, ba)
-    circleBorder:Show()
-    circleFill:SetColorTexture(backR, backG, backB, backA)
-    circleFill:Show()
-    pieHolder:Show()
+    if br ~= lastBorderR or bg ~= lastBorderG or bb ~= lastBorderB or ba ~= lastBorderA then
+        lastBorderR, lastBorderG, lastBorderB, lastBorderA = br, bg, bb, ba
+        circleBorder:SetColorTexture(br, bg, bb, ba)
+    end
+    if backR ~= lastBackR or backG ~= lastBackG or backB ~= lastBackB or backA ~= lastBackA then
+        lastBackR, lastBackG, lastBackB, lastBackA = backR, backG, backB, backA
+        circleFill:SetColorTexture(backR, backG, backB, backA)
+    end
+    if not baseShown then
+        display:Show()
+        circleBorder:Show()
+        circleFill:Show()
+        pieHolder:Show()
+        baseShown = true
+    end
     if UpdatePie(progress) then
         return
     end
@@ -556,6 +693,18 @@ local function FontSize()
     return math.floor(size + 0.5)
 end
 
+local textHidden = true
+local lastTextR, lastTextG, lastTextB
+
+local function PaintTextColor()
+    local r, g, b = TextColor()
+    if r == lastTextR and g == lastTextG and b == lastTextB then
+        return
+    end
+    lastTextR, lastTextG, lastTextB = r, g, b
+    text:SetTextColor(r, g, b)
+end
+
 local function ApplyFont()
     local size = FontSize()
     local font = (GameFontNormal and GameFontNormal.GetFont and GameFontNormal:GetFont()) or "Fonts\\FRIZQT__.TTF"
@@ -563,7 +712,7 @@ local function ApplyFont()
     if not ok then
         pcall(text.SetFont, text, "Fonts\\FRIZQT__.TTF", size, "OUTLINE")
     end
-    text:SetTextColor(TextColor())
+    PaintTextColor()
     if TimerStyle() ~= "circle" then
         display:SetSize(math.max(72, size * 3.4), math.max(28, size + 12))
     end
@@ -708,15 +857,19 @@ local function RescaleFromSpeeds()
     end
 end
 
--- Soonest live swing. An overdue active swing stays at 0 until the client
--- sends the hit or the attack stops, so a delayed shot does not vanish.
+local remainNow
+local remainExpiry
+local function ReadRemain()
+    return remainExpiry - remainNow
+end
+
 local function NextSwing(now)
     local bestRemain, bestSpeed, bestExpiry
+    remainNow = now
     for _, swing in pairs(swings) do
         if swing.active and swing.expiry then
-            local ok, remain = pcall(function()
-                return swing.expiry - now
-            end)
+            remainExpiry = swing.expiry
+            local ok, remain = pcall(ReadRemain)
             if not ok or not PlainNumber(remain) then
                 swing.active = false
                 swing.expiry = nil
@@ -738,18 +891,43 @@ local function NextSwing(now)
     return bestRemain, bestSpeed, bestExpiry
 end
 
+local REDRAW_INTERVAL = 1 / 30
+
+local function StartTicker()
+    if ticking then
+        return
+    end
+    ticking = true
+    refreshElapsed = REDRAW_INTERVAL
+    driver:SetScript("OnUpdate", OnSwingUpdate)
+end
+
+local function StopTicker()
+    if not ticking then
+        return
+    end
+    ticking = false
+    refreshElapsed = 0
+    driver:SetScript("OnUpdate", nil)
+end
+
 local function RefreshText()
     if not enabled and not editing then
         display:Hide()
         HideCircle()
+        StopTicker()
         return
     end
-    text:Hide()
+    if not textHidden then
+        text:Hide()
+        textHidden = true
+    end
     local now = GetTime()
     local remain, speed, expiry = NextSwing(now)
     if remain and PlainNumber(speed) and speed > 0 and PlainNumber(expiry) then
         local progress = 1 - (remain / speed)
         ShowCircle(expiry - speed, speed, progress)
+        StartTicker()
     elseif editing then
         local duration = 1.6
         if not sampleStart or now >= sampleStart + duration then
@@ -757,10 +935,21 @@ local function RefreshText()
             pieStamp = nil
         end
         ShowCircle(sampleStart, duration, (now - sampleStart) / duration)
+        StartTicker()
     else
         HideCircle()
         display:Hide()
+        StopTicker()
     end
+end
+
+OnSwingUpdate = function(_, elapsed)
+    refreshElapsed = refreshElapsed + elapsed
+    if refreshElapsed < REDRAW_INTERVAL then
+        return
+    end
+    refreshElapsed = 0
+    RefreshText()
 end
 
 function SimpleTweaksSwing.ApplyPosition()
@@ -862,7 +1051,7 @@ function SimpleTweaksSwing.SetColor(r, g, b)
         SimpleTweaksDB.swingTimerColorG = ClampUnit(g, 0.86)
         SimpleTweaksDB.swingTimerColorB = ClampUnit(b, 0.55)
     end
-    text:SetTextColor(TextColor())
+    PaintTextColor()
     RefreshText()
 end
 
@@ -1031,23 +1220,6 @@ driver:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ADDON_LOADED" then
         HookEditMode()
     end
-end)
-
-driver:SetScript("OnUpdate", function(_, elapsed)
-    watchElapsed = watchElapsed + elapsed
-    if watchElapsed >= 0.5 then
-        watchElapsed = 0
-        HookEditMode()
-    end
-    if not enabled and not editing then
-        return
-    end
-    refreshElapsed = refreshElapsed + elapsed
-    if refreshElapsed < 0.02 then
-        return
-    end
-    refreshElapsed = 0
-    RefreshText()
 end)
 
 display:SetClampedToScreen(true)
