@@ -35,6 +35,7 @@ local knownHands = {
 local driver = CreateFrame("Frame")
 local display = CreateFrame("Frame", "SimpleTweaksSwingTimer", UIParent)
 local text = display:CreateFontString(nil, "OVERLAY")
+local editLabel = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 local selection = CreateFrame("Frame", nil, display, "BackdropTemplate")
 local enabled = false
 local editing = false
@@ -42,6 +43,7 @@ local dragging = false
 local layoutKey = "default"
 local editModeHooked = false
 local refreshElapsed = 0
+local watchElapsed = 0
 
 local function PlainNumber(value)
     if type(value) ~= "number" then
@@ -122,18 +124,36 @@ local function BorderColor()
 end
 
 local circleBorder
+local circleFill
 local circlePie
 local pieStamp
 local sampleStart
+local editCallbacks = false
 
 local function AddCircleMask(owner, texture)
     if not texture or type(texture.AddMaskTexture) ~= "function" or type(owner.CreateMaskTexture) ~= "function" then
         return
     end
-    local mask = owner:CreateMaskTexture()
+    local ok, mask = pcall(owner.CreateMaskTexture, owner)
+    if not ok or not mask then
+        return
+    end
     mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     mask:SetAllPoints(texture)
     texture:AddMaskTexture(mask)
+end
+
+local function IgnoreMouse(frame)
+    if not frame then
+        return
+    end
+    frame:EnableMouse(false)
+    if frame.SetMouseClickEnabled then
+        frame:SetMouseClickEnabled(false)
+    end
+    if frame.SetMouseMotionEnabled then
+        frame:SetMouseMotionEnabled(false)
+    end
 end
 
 local function EnsureCircle()
@@ -142,33 +162,31 @@ local function EnsureCircle()
     end
     circleBorder = display:CreateTexture(nil, "BACKGROUND", nil, 0)
     circleBorder:SetTexture("Interface\\Buttons\\WHITE8X8")
-    circleBorder:SetPoint("CENTER")
     AddCircleMask(display, circleBorder)
     circleBorder:Hide()
 
-    local ok, pie = pcall(CreateFrame, "Cooldown", nil, display, "CooldownFrameTemplate")
-    if ok and pie then
+    circleFill = display:CreateTexture(nil, "ARTWORK", nil, 1)
+    circleFill:SetTexture("Interface\\Buttons\\WHITE8X8")
+    AddCircleMask(display, circleFill)
+    circleFill:Hide()
+
+    local pie = CreateFrame("Cooldown", nil, display)
+    if pie and pie.SetCooldown then
         circlePie = pie
-        pie:SetPoint("CENTER")
+        pie.noCooldownCount = true
         if pie.SetDrawBling then
-            pie:SetDrawBling(false)
+            pcall(pie.SetDrawBling, pie, false)
         end
         if pie.SetDrawSwipe then
-            pie:SetDrawSwipe(true)
+            pcall(pie.SetDrawSwipe, pie, true)
         end
         if pie.SetHideCountdownNumbers then
-            pie:SetHideCountdownNumbers(true)
+            pcall(pie.SetHideCountdownNumbers, pie, true)
         end
         if pie.SetUseCircularEdge then
-            pie:SetUseCircularEdge(true)
+            pcall(pie.SetUseCircularEdge, pie, true)
         end
-        pie:EnableMouse(false)
-        if pie.SetMouseClickEnabled then
-            pie:SetMouseClickEnabled(false)
-        end
-        if pie.SetMouseMotionEnabled then
-            pie:SetMouseMotionEnabled(false)
-        end
+        IgnoreMouse(pie)
         pie:Hide()
     end
 end
@@ -178,25 +196,41 @@ local function ApplyCircleGeometry()
     local size = CircleSize()
     local thickness = math.max(1, math.floor(size / 9 + 0.5))
     local inner = math.max(1, size - thickness * 2)
+    local width = size
+    local height = size
+    if editing then
+        width = math.max(size + 16, 130)
+        height = size + 22
+    end
+    display:SetSize(width, height)
+    circleBorder:ClearAllPoints()
     circleBorder:SetSize(size, size)
-    circleBorder:SetColorTexture(BorderColor())
+    if editing then
+        circleBorder:SetPoint("TOP", display, "TOP", 0, 0)
+        editLabel:ClearAllPoints()
+        editLabel:SetPoint("TOP", circleBorder, "BOTTOM", 0, -2)
+        editLabel:Show()
+    else
+        circleBorder:SetPoint("CENTER")
+        editLabel:Hide()
+    end
+    circleFill:ClearAllPoints()
+    circleFill:SetSize(inner, inner)
+    circleFill:SetPoint("CENTER", circleBorder, "CENTER")
     if circlePie then
+        circlePie:ClearAllPoints()
         circlePie:SetSize(inner, inner)
+        circlePie:SetPoint("CENTER", circleBorder, "CENTER")
         if circlePie.SetEdgeScale then
             local scale = inner / 36
-            if scale < 0.2 then
-                scale = 0.2
+            if scale < 0.25 then
+                scale = 0.25
             elseif scale > 1.5 then
                 scale = 1.5
             end
-            circlePie:SetEdgeScale(scale)
+            pcall(circlePie.SetEdgeScale, circlePie, scale)
         end
     end
-    local hit = size
-    if editing then
-        hit = math.max(size, 36)
-    end
-    display:SetSize(hit, hit)
     if selection and selection.SetFrameLevel then
         local level = display:GetFrameLevel()
         if circlePie and circlePie.SetFrameLevel then
@@ -210,43 +244,72 @@ local function HideCircle()
     if circleBorder then
         circleBorder:Hide()
     end
+    if circleFill then
+        circleFill:Hide()
+    end
     if circlePie then
         circlePie:Hide()
         if circlePie.Clear then
-            circlePie:Clear()
+            pcall(circlePie.Clear, circlePie)
         end
     end
     pieStamp = nil
 end
 
+local function ApplySwipeColor(pie, r, g, b, a)
+    a = a or 1
+    if pie.SetSwipeColorRGBA and pcall(pie.SetSwipeColorRGBA, pie, r, g, b, a) then
+        return
+    end
+    if CreateColor then
+        local color = CreateColor(r, g, b, a)
+        if pcall(pie.SetSwipeColor, pie, color, a) then
+            return
+        end
+        if pcall(pie.SetSwipeColor, pie, color) then
+            return
+        end
+    end
+    pcall(pie.SetSwipeColor, pie, r, g, b, a)
+end
+
 local function ShowCircle(startTime, duration, progress)
+    display:Show()
     EnsureCircle()
     ApplyCircleGeometry()
-    circleBorder:Show()
     if progress < 0 then
         progress = 0
     elseif progress > 1 then
         progress = 1
     end
     local alpha = 0.5 + 0.5 * progress
-    local reverse = PieFills()
-    local spark = SparkOn()
-    if not circlePie then
+    local r, g, b = CircleColor()
+    local br, bg, bb = BorderColor()
+    circleBorder:SetColorTexture(br, bg, bb, 1)
+    circleBorder:Show()
+    circleFill:SetColorTexture(r, g, b, alpha)
+    circleFill:Show()
+    if not circlePie or not PlainNumber(startTime) or not PlainNumber(duration) or duration <= 0 then
         return
     end
     circlePie:Show()
-    if circlePie.SetDrawEdge then
-        circlePie:SetDrawEdge(spark)
+    if circlePie.SetDrawSwipe then
+        circlePie:SetDrawSwipe(true)
     end
-    local stamp = string.format("%.2f|%.2f|%s", startTime or 0, duration or 0, reverse and "f" or "d")
-    if pieStamp ~= stamp and startTime and duration and duration > 0 then
+    if circlePie.SetDrawEdge then
+        circlePie:SetDrawEdge(SparkOn())
+    end
+    local reverse = not PieFills()
+    local stamp = math.floor(startTime * 20) .. ":" .. math.floor(duration * 20) .. ":" .. (reverse and "1" or "0") .. ":" .. (SparkOn() and "1" or "0")
+    if pieStamp ~= stamp then
         pieStamp = stamp
         if circlePie.SetReverse then
             circlePie:SetReverse(reverse)
         end
-        circlePie:SetCooldown(startTime, duration)
+        pcall(circlePie.SetCooldown, circlePie, startTime, duration)
     end
-    circlePie:SetSwipeColor(CircleColor(), alpha)
+    circleBorder:SetColorTexture(br, bg, bb, 1)
+    ApplySwipeColor(circlePie, br, bg, bb, 1)
 end
 
 local function FontSize()
@@ -420,8 +483,13 @@ local function NextSwing(now)
     local bestRemain, bestSpeed, bestExpiry
     for _, swing in pairs(swings) do
         if swing.active and swing.expiry then
-            local remain = swing.expiry - now
-            if remain < -OVERDUE_LIMIT then
+            local ok, remain = pcall(function()
+                return swing.expiry - now
+            end)
+            if not ok or not PlainNumber(remain) then
+                swing.active = false
+                swing.expiry = nil
+            elseif remain < -OVERDUE_LIMIT then
                 swing.active = false
                 swing.expiry = nil
             else
@@ -442,41 +510,26 @@ end
 local function RefreshText()
     if not enabled and not editing then
         display:Hide()
+        HideCircle()
         return
     end
+    text:Hide()
     local now = GetTime()
     local remain, speed, expiry = NextSwing(now)
-    if TimerStyle() == "circle" then
-        text:Hide()
-        if remain and speed and speed > 0 and expiry then
-            local progress = 1 - (remain / speed)
-            ShowCircle(expiry - speed, speed, progress)
-            display:Show()
-        elseif editing then
-            local duration = 1.6
-            if not sampleStart or now >= sampleStart + duration then
-                sampleStart = now
-                pieStamp = nil
-            end
-            ShowCircle(sampleStart, duration, (now - sampleStart) / duration)
-            display:Show()
-        else
-            HideCircle()
-            display:Hide()
-        end
-        return
-    end
-    HideCircle()
-    text:Show()
-    if remain then
-        text:SetText(FormatRemaining(remain))
+    if remain and PlainNumber(speed) and speed > 0 and PlainNumber(expiry) then
+        local progress = 1 - (remain / speed)
+        ShowCircle(expiry - speed, speed, progress)
     elseif editing then
-        text:SetText(FormatRemaining(1.6))
+        local duration = 1.6
+        if not sampleStart or now >= sampleStart + duration then
+            sampleStart = now
+            pieStamp = nil
+        end
+        ShowCircle(sampleStart, duration, (now - sampleStart) / duration)
     else
+        HideCircle()
         display:Hide()
-        return
     end
-    display:Show()
 end
 
 function SimpleTweaksSwing.ApplyPosition()
@@ -511,51 +564,64 @@ local function SavePosition()
 end
 
 local function EnterEditMode()
+    if editing then
+        return
+    end
     editing = true
     display.editing = true
+    display:SetFrameStrata("TOOLTIP")
+    display:SetFrameLevel(400)
     display:EnableMouse(true)
     selection:EnableMouse(true)
     selection:Show()
+    editLabel:Show()
+    pieStamp = nil
+    sampleStart = nil
     if layoutKey == "default" and C_EditMode and C_EditMode.GetLayouts then
         local ok, info = pcall(C_EditMode.GetLayouts)
         if ok then
-            NoteLayouts(info)
+            pcall(NoteLayouts, info)
         end
     end
     RefreshText()
 end
 
 local function ExitEditMode()
+    if not editing then
+        return
+    end
     if dragging then
         display:StopMovingOrSizing()
         dragging = false
     end
     editing = false
     display.editing = false
+    display:SetFrameStrata("HIGH")
+    display:SetFrameLevel(20)
     display:EnableMouse(false)
     selection:EnableMouse(false)
     selection:Hide()
+    editLabel:Hide()
     SavePosition()
+    SimpleTweaksSwing.ApplyPosition()
     RefreshText()
 end
 
 local function HookEditMode()
-    if editModeHooked or not EditModeManagerFrame or not EditModeManagerFrame.HookScript then
-        return
+    if EditModeManagerFrame and EditModeManagerFrame.HookScript and not editModeHooked then
+        editModeHooked = true
+        EditModeManagerFrame:HookScript("OnShow", EnterEditMode)
+        EditModeManagerFrame:HookScript("OnHide", ExitEditMode)
     end
-    editModeHooked = true
-    EditModeManagerFrame:HookScript("OnShow", EnterEditMode)
-    EditModeManagerFrame:HookScript("OnHide", ExitEditMode)
-    if EditModeManagerFrame:IsShown() then
+    if not editCallbacks and EventRegistry and EventRegistry.RegisterCallback then
+        editCallbacks = true
+        pcall(EventRegistry.RegisterCallback, EventRegistry, "EditMode.Enter", EnterEditMode, driver)
+        pcall(EventRegistry.RegisterCallback, EventRegistry, "EditMode.Exit", ExitEditMode, driver)
+    end
+    if EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown() then
         EnterEditMode()
-    end
-    if EventRegistry and EventRegistry.RegisterFrameEventAndCallback then
-        pcall(EventRegistry.RegisterFrameEventAndCallback, EventRegistry, "EDIT_MODE_LAYOUTS_UPDATED", function(_, layoutInfo)
-            if type(layoutInfo) ~= "table" then
-                return
-            end
-            NoteLayouts(layoutInfo)
-        end, driver)
+    elseif editing and EditModeManagerFrame and EditModeManagerFrame.IsShown and not EditModeManagerFrame:IsShown() then
+        ExitEditMode()
     end
 end
 
@@ -588,8 +654,6 @@ function SimpleTweaksSwing.SetStyle(style)
     sampleStart = nil
     if TimerStyle() == "circle" then
         ApplyCircleGeometry()
-    else
-        ApplyFont()
     end
     RefreshText()
 end
@@ -613,9 +677,7 @@ function SimpleTweaksSwing.SetCircleSize(size)
     if SimpleTweaksDB then
         SimpleTweaksDB.swingTimerCircleSize = tonumber(size) or CIRCLE_DEFAULT
     end
-    if TimerStyle() == "circle" then
-        ApplyCircleGeometry()
-    end
+    ApplyCircleGeometry()
     RefreshText()
 end
 
@@ -709,12 +771,17 @@ driver:SetScript("OnEvent", function(_, event, ...)
                 NoteLayouts(info)
             end
         end
-    elseif event == "PLAYER_ENTERING_WORLD" then
+    elseif event == "PLAYER_ENTERING_WORLD" or event == "ADDON_LOADED" then
         HookEditMode()
     end
 end)
 
 driver:SetScript("OnUpdate", function(_, elapsed)
+    watchElapsed = watchElapsed + elapsed
+    if watchElapsed >= 0.5 then
+        watchElapsed = 0
+        HookEditMode()
+    end
     if not enabled and not editing then
         return
     end
@@ -745,9 +812,10 @@ display:SetScript("OnDragStop", function(self)
 end)
 display:Hide()
 
-text:SetAllPoints()
-text:SetJustifyH("CENTER")
-text:SetJustifyV("MIDDLE")
+text:Hide()
+editLabel:SetText("Schwungtimer")
+editLabel:SetTextColor(1, 0.86, 0.55)
+editLabel:Hide()
 
 selection:SetAllPoints()
 selection:EnableMouse(false)
@@ -774,6 +842,7 @@ selection:SetBackdropColor(0.2, 0.55, 0.85, 0.18)
 selection:SetBackdropBorderColor(0.35, 0.75, 1, 0.95)
 selection:Hide()
 
+pcall(driver.RegisterEvent, driver, "ADDON_LOADED")
 pcall(driver.RegisterEvent, driver, "PLAYER_SWING")
 pcall(driver.RegisterEvent, driver, "PLAYER_ENTER_COMBAT")
 pcall(driver.RegisterEvent, driver, "PLAYER_LEAVE_COMBAT")
