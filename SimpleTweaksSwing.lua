@@ -118,9 +118,24 @@ local function CircleColor()
     return ClampUnit(db and db.swingTimerCircleR, 1), ClampUnit(db and db.swingTimerCircleG, 0.86), ClampUnit(db and db.swingTimerCircleB, 0.55)
 end
 
+local function CircleAlpha()
+    local db = SimpleTweaksDB
+    return ClampUnit(db and db.swingTimerCircleA, 1)
+end
+
 local function BorderColor()
     local db = SimpleTweaksDB
-    return ClampUnit(db and db.swingTimerBorderR, 0), ClampUnit(db and db.swingTimerBorderG, 0), ClampUnit(db and db.swingTimerBorderB, 0)
+    return ClampUnit(db and db.swingTimerBorderR, 0), ClampUnit(db and db.swingTimerBorderG, 0), ClampUnit(db and db.swingTimerBorderB, 0), ClampUnit(db and db.swingTimerBorderA, 1)
+end
+
+local function LineAlpha()
+    local db = SimpleTweaksDB
+    return ClampUnit(db and db.swingTimerLineA, 1)
+end
+
+local function BackColor()
+    local db = SimpleTweaksDB
+    return ClampUnit(db and db.swingTimerBackR, 0.02), ClampUnit(db and db.swingTimerBackG, 0.02), ClampUnit(db and db.swingTimerBackB, 0.02), ClampUnit(db and db.swingTimerBackA, 0.82)
 end
 
 local circleBorder
@@ -382,6 +397,7 @@ local function PlaceSpark(shownAngle)
     local theta = math.rad(shownAngle)
     sparkDot:ClearAllPoints()
     sparkDot:SetPoint("CENTER", pieHolder, "CENTER", math.sin(theta) * radius, math.cos(theta) * radius)
+    sparkDot:SetVertexColor(1, 0.96, 0.85, LineAlpha())
     sparkDot:Show()
 end
 
@@ -428,7 +444,7 @@ local function UpdatePie(progress)
     local band = math.max(1, math.floor(size / 9 + 0.5))
     local radius = math.max(1, (size - band * 2) / 2 - 0.25)
     local slice = math.max(1.25, (radius * 2 * math.pi / PIE_SLICES) + 0.75)
-    local alpha = 0.5 + 0.5 * progress
+    local alpha = (0.5 + 0.5 * progress) * CircleAlpha()
     local r, g, b = CircleColor()
     local grow = PieFills()
     local shown = grow and progress or (1 - progress)
@@ -464,10 +480,11 @@ local function UpdatePie(progress)
     local edgeOk = false
     if edgeLine and progress > 0.001 and progress < 0.999 and shown > 0.002 then
         local thickness = SparkOn() and math.max(2, slice) or math.max(1, slice * 0.45)
-        local er, eg, eb, ea = r, g, b, 1
+        local er, eg, eb = r, g, b
         if SparkOn() then
-            er, eg, eb, ea = 1, 0.96, 0.85, 1
+            er, eg, eb = 1, 0.96, 0.85
         end
+        local ea = LineAlpha()
         edgeOk = pcall(function()
             edgeLine:SetThickness(thickness)
             edgeLine:SetColorTexture(er, eg, eb, ea)
@@ -494,13 +511,14 @@ local function ShowCircle(startTime, duration, progress)
         progress = 1
     end
     local r, g, b = CircleColor()
-    local br, bg, bb = BorderColor()
-    local alpha = 0.5 + 0.5 * progress
+    local br, bg, bb, ba = BorderColor()
+    local backR, backG, backB, backA = BackColor()
+    local alpha = (0.5 + 0.5 * progress) * CircleAlpha()
     local grow = PieFills()
     local shown = grow and progress or (1 - progress)
-    circleBorder:SetColorTexture(br, bg, bb, 1)
+    circleBorder:SetColorTexture(br, bg, bb, ba)
     circleBorder:Show()
-    circleFill:SetColorTexture(0.02, 0.02, 0.02, 0.82)
+    circleFill:SetColorTexture(backR, backG, backB, backA)
     circleFill:Show()
     pieHolder:Show()
     if UpdatePie(progress) then
@@ -894,23 +912,51 @@ function SimpleTweaksSwing.SetCircleSize(size)
     RefreshText()
 end
 
-function SimpleTweaksSwing.SetCircleColor(r, g, b)
+function SimpleTweaksSwing.SetCircleColor(r, g, b, a)
     if SimpleTweaksDB then
         SimpleTweaksDB.swingTimerCircleR = ClampUnit(r, 1)
         SimpleTweaksDB.swingTimerCircleG = ClampUnit(g, 0.86)
         SimpleTweaksDB.swingTimerCircleB = ClampUnit(b, 0.55)
+        if a ~= nil then
+            SimpleTweaksDB.swingTimerCircleA = ClampUnit(a, 1)
+        end
     end
     RefreshText()
 end
 
-function SimpleTweaksSwing.SetBorderColor(r, g, b)
+function SimpleTweaksSwing.SetBorderColor(r, g, b, a)
     if SimpleTweaksDB then
         SimpleTweaksDB.swingTimerBorderR = ClampUnit(r, 0)
         SimpleTweaksDB.swingTimerBorderG = ClampUnit(g, 0)
         SimpleTweaksDB.swingTimerBorderB = ClampUnit(b, 0)
+        if a ~= nil then
+            SimpleTweaksDB.swingTimerBorderA = ClampUnit(a, 1)
+        end
     end
     if circleBorder then
         circleBorder:SetColorTexture(BorderColor())
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetBackColor(r, g, b, a)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerBackR = ClampUnit(r, 0.02)
+        SimpleTweaksDB.swingTimerBackG = ClampUnit(g, 0.02)
+        SimpleTweaksDB.swingTimerBackB = ClampUnit(b, 0.02)
+        if a ~= nil then
+            SimpleTweaksDB.swingTimerBackA = ClampUnit(a, 0.82)
+        end
+    end
+    if circleFill then
+        circleFill:SetColorTexture(BackColor())
+    end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetLineAlpha(a)
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerLineA = ClampUnit(a, 1)
     end
     RefreshText()
 end

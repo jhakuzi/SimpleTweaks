@@ -16,9 +16,16 @@ local DEFAULTS = {
     swingTimerCircleR = 1,
     swingTimerCircleG = 0.86,
     swingTimerCircleB = 0.55,
+    swingTimerCircleA = 1,
     swingTimerBorderR = 0,
     swingTimerBorderG = 0,
     swingTimerBorderB = 0,
+    swingTimerBorderA = 1,
+    swingTimerLineA = 1,
+    swingTimerBackR = 0.02,
+    swingTimerBackG = 0.02,
+    swingTimerBackB = 0.02,
+    swingTimerBackA = 0.82,
 }
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
@@ -302,7 +309,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(470, 340)
+    window:SetSize(470, 380)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -371,33 +378,53 @@ local function CreateOptionsWindow()
     end
 
     local function OpenColor(getColor, applyColor)
-        local r, g, b = getColor()
-        local function Apply(nr, ng, nb)
+        local r, g, b, a = getColor()
+        a = a or 1
+        local function Apply(nr, ng, nb, na)
             if nr then
-                applyColor(nr, ng, nb)
+                applyColor(nr, ng, nb, na or a)
             end
+        end
+        local function ReadAlpha()
+            if ColorPickerFrame.GetColorAlpha then
+                local ok, picked = pcall(ColorPickerFrame.GetColorAlpha, ColorPickerFrame)
+                if ok and type(picked) == "number" then
+                    return picked
+                end
+            end
+            if type(ColorPickerFrame.opacity) == "number" then
+                return 1 - ColorPickerFrame.opacity
+            end
+            return a
+        end
+        local function ReadAndApply()
+            local pickedR, pickedG, pickedB
+            if ColorPickerFrame.GetColorRGB then
+                local ok, pr, pg, pb = pcall(ColorPickerFrame.GetColorRGB, ColorPickerFrame)
+                if ok then
+                    pickedR, pickedG, pickedB = pr, pg, pb
+                end
+            end
+            if not pickedR and ColorPickerFrame.GetColorRGB == nil then
+                return
+            end
+            Apply(pickedR, pickedG, pickedB, ReadAlpha())
         end
         if ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow then
             ColorPickerFrame:SetupColorPickerAndShow({
                 r = r,
                 g = g,
                 b = b,
-                opacity = 1,
-                hasOpacity = false,
-                swatchFunc = function()
-                    if not ColorPickerFrame.GetColorRGB then
-                        return
-                    end
-                    local ok, pickedR, pickedG, pickedB = pcall(ColorPickerFrame.GetColorRGB, ColorPickerFrame)
-                    if ok then
-                        Apply(pickedR, pickedG, pickedB)
-                    end
-                end,
+                opacity = a,
+                a = a,
+                hasOpacity = true,
+                swatchFunc = ReadAndApply,
+                opacityFunc = ReadAndApply,
                 cancelFunc = function(previous)
                     if type(previous) == "table" then
-                        Apply(previous.r or r, previous.g or g, previous.b or b)
+                        Apply(previous.r or r, previous.g or g, previous.b or b, previous.a or a)
                     else
-                        Apply(r, g, b)
+                        Apply(r, g, b, a)
                     end
                 end,
             })
@@ -406,18 +433,18 @@ local function CreateOptionsWindow()
         if not ColorPickerFrame or not ColorPickerFrame.SetColorRGB then
             return
         end
-        ColorPickerFrame.func = function()
-            Apply(ColorPickerFrame:GetColorRGB())
-        end
-        ColorPickerFrame.hasOpacity = false
-        ColorPickerFrame.opacityFunc = nil
-        ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+        ColorPickerFrame.func = ReadAndApply
+        ColorPickerFrame.opacityFunc = ReadAndApply
+        ColorPickerFrame.hasOpacity = true
+        ColorPickerFrame.opacity = 1 - a
+        ColorPickerFrame.previousValues = { r = r, g = g, b = b, a = a }
         ColorPickerFrame.cancelFunc = function(previous)
-            local previousR, previousG, previousB = r, g, b
+            local previousR, previousG, previousB, previousA = r, g, b, a
             if type(previous) == "table" then
                 previousR, previousG, previousB = previous.r or r, previous.g or g, previous.b or b
+                previousA = previous.a or a
             end
-            Apply(previousR, previousG, previousB)
+            Apply(previousR, previousG, previousB, previousA)
         end
         ColorPickerFrame:SetColorRGB(r, g, b)
         ColorPickerFrame:Hide()
@@ -433,12 +460,12 @@ local function CreateOptionsWindow()
         local fill = button:CreateTexture(nil, "ARTWORK")
         fill:SetPoint("TOPLEFT", 2, -2)
         fill:SetPoint("BOTTOMRIGHT", -2, 2)
-        local red, green, blue = getColor()
-        fill:SetColorTexture(red, green, blue, 1)
+        local red, green, blue, alpha = getColor()
+        fill:SetColorTexture(red, green, blue, alpha or 1)
         button:SetScript("OnClick", function()
-            OpenColor(getColor, function(nr, ng, nb)
-                fill:SetColorTexture(nr, ng, nb, 1)
-                applyColor(nr, ng, nb)
+            OpenColor(getColor, function(nr, ng, nb, na)
+                fill:SetColorTexture(nr, ng, nb, na or 1)
+                applyColor(nr, ng, nb, na)
             end)
         end)
         button:SetScript("OnEnter", function(self)
@@ -523,34 +550,52 @@ local function CreateOptionsWindow()
 
     local function CircleFillColor()
         local db = SimpleTweaksDB
-        return ClampColor(db and db.swingTimerCircleR, 1), ClampColor(db and db.swingTimerCircleG, 0.86), ClampColor(db and db.swingTimerCircleB, 0.55)
+        return ClampColor(db and db.swingTimerCircleR, 1), ClampColor(db and db.swingTimerCircleG, 0.86), ClampColor(db and db.swingTimerCircleB, 0.55), ClampColor(db and db.swingTimerCircleA, 1)
     end
 
     local function CircleEdgeColor()
         local db = SimpleTweaksDB
-        return ClampColor(db and db.swingTimerBorderR, 0), ClampColor(db and db.swingTimerBorderG, 0), ClampColor(db and db.swingTimerBorderB, 0)
+        return ClampColor(db and db.swingTimerBorderR, 0), ClampColor(db and db.swingTimerBorderG, 0), ClampColor(db and db.swingTimerBorderB, 0), ClampColor(db and db.swingTimerBorderA, 1)
     end
 
-    local fillSwatch = MakeSwatch("Kreisfarbe", CircleFillColor, function(r, g, b)
+    local function CircleBackColor()
+        local db = SimpleTweaksDB
+        return ClampColor(db and db.swingTimerBackR, 0.02), ClampColor(db and db.swingTimerBackG, 0.02), ClampColor(db and db.swingTimerBackB, 0.02), ClampColor(db and db.swingTimerBackA, 0.82)
+    end
+
+    local fillSwatch = MakeSwatch("Füllfarbe und Deckkraft", CircleFillColor, function(r, g, b, a)
         if SimpleTweaksSwing and SimpleTweaksSwing.SetCircleColor then
-            SimpleTweaksSwing.SetCircleColor(r, g, b)
+            SimpleTweaksSwing.SetCircleColor(r, g, b, a)
         elseif SimpleTweaksDB then
             SimpleTweaksDB.swingTimerCircleR = r
             SimpleTweaksDB.swingTimerCircleG = g
             SimpleTweaksDB.swingTimerCircleB = b
+            SimpleTweaksDB.swingTimerCircleA = a
         end
     end)
-    local edgeSwatch = MakeSwatch("Randfarbe", CircleEdgeColor, function(r, g, b)
+    local edgeSwatch = MakeSwatch("Randfarbe und Deckkraft", CircleEdgeColor, function(r, g, b, a)
         if SimpleTweaksSwing and SimpleTweaksSwing.SetBorderColor then
-            SimpleTweaksSwing.SetBorderColor(r, g, b)
+            SimpleTweaksSwing.SetBorderColor(r, g, b, a)
         elseif SimpleTweaksDB then
             SimpleTweaksDB.swingTimerBorderR = r
             SimpleTweaksDB.swingTimerBorderG = g
             SimpleTweaksDB.swingTimerBorderB = b
+            SimpleTweaksDB.swingTimerBorderA = a
+        end
+    end)
+    local backSwatch = MakeSwatch("Hintergrund und Deckkraft", CircleBackColor, function(r, g, b, a)
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetBackColor then
+            SimpleTweaksSwing.SetBackColor(r, g, b, a)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerBackR = r
+            SimpleTweaksDB.swingTimerBackG = g
+            SimpleTweaksDB.swingTimerBackB = b
+            SimpleTweaksDB.swingTimerBackA = a
         end
     end)
     fillSwatch:SetPoint("LEFT", circleLarger, "RIGHT", 12, 0)
     edgeSwatch:SetPoint("LEFT", fillSwatch, "RIGHT", 6, 0)
+    backSwatch:SetPoint("LEFT", edgeSwatch, "RIGHT", 6, 0)
 
     local drainMode = MakeChoice("Abnehmend", 96)
     local fillMode = MakeChoice("Zunehmend", 96)
@@ -595,6 +640,48 @@ local function CreateOptionsWindow()
             SimpleTweaksDB.swingTimerSpark = on
         end
     end)
+
+    local lineLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    lineLabel:SetPoint("TOPLEFT", 52, -312)
+    lineLabel:SetText("Linie")
+    lineLabel:SetTextColor(0.75, 0.66, 0.5)
+    local lineLess = MakeFontStep("-")
+    local lineText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lineText:SetTextColor(0.9, 0.79, 0.61)
+    lineText:SetWidth(44)
+    lineText:SetJustifyH("CENTER")
+    local lineMore = MakeFontStep("+")
+    lineLess:SetPoint("LEFT", lineLabel, "RIGHT", 10, 0)
+    lineText:SetPoint("LEFT", lineLess, "RIGHT", 2, 0)
+    lineMore:SetPoint("LEFT", lineText, "RIGHT", 2, 0)
+
+    local function CurrentLinePercent()
+        local alpha = ClampColor(SimpleTweaksDB and SimpleTweaksDB.swingTimerLineA, 1)
+        return math.floor(alpha * 100 + 0.5)
+    end
+
+    local function PaintLinePercent()
+        lineText:SetText(CurrentLinePercent() .. "%")
+    end
+
+    local function StepLine(direction)
+        local percent = CurrentLinePercent() + direction * 5
+        if percent < 0 then
+            percent = 0
+        elseif percent > 100 then
+            percent = 100
+        end
+        local alpha = percent / 100
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetLineAlpha then
+            SimpleTweaksSwing.SetLineAlpha(alpha)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerLineA = alpha
+        end
+        PaintLinePercent()
+    end
+    lineLess:SetScript("OnClick", function() StepLine(-1) end)
+    lineMore:SetScript("OnClick", function() StepLine(1) end)
+    PaintLinePercent()
 
     return window
 end
