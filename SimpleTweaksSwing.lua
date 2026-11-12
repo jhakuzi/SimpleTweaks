@@ -143,6 +143,17 @@ local function LineAlpha()
     return ClampUnit(db and db.swingTimerLineA, 1)
 end
 
+local function LineThickness()
+    local value = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerLineThickness) or 1
+    if value < 1 then
+        return 1
+    end
+    if value > 8 then
+        return 8
+    end
+    return floor(value + 0.5)
+end
+
 local function BackColor()
     local db = SimpleTweaksDB
     return ClampUnit(db and db.swingTimerBackR, 0.02), ClampUnit(db and db.swingTimerBackG, 0.02), ClampUnit(db and db.swingTimerBackB, 0.02), ClampUnit(db and db.swingTimerBackA, 0.82)
@@ -188,6 +199,7 @@ local WEDGE_LR = LOWER_RIGHT_VERTEX or 4
 local wedgeTextures
 local fullDisc
 local sparkDot
+local sparkHalo
 local pieLines
 local edgeLine
 local ringHolder
@@ -270,7 +282,10 @@ local function EnsureCircle()
         wedgeTextures[i] = tex
     end
 
+    sparkHalo = PrepareDisc(pieHolder, "OVERLAY", 6)
     sparkDot = PrepareDisc(pieHolder, "OVERLAY", 7)
+    sparkHalo:SetVertexColor(1, 0.97, 0.82, 0.38)
+    sparkDot:SetVertexColor(1, 1, 0.92, 1)
 
     ringLines = {}
     if ringHolder.CreateLine then
@@ -320,7 +335,9 @@ local function ApplyCircleGeometry()
     circleFill:SetPoint("CENTER", pieHolder, "CENTER", 0, 0)
     fullDisc:ClearAllPoints()
     fullDisc:SetAllPoints(pieHolder)
-    sparkDot:SetSize(math.max(2, math.floor(inner * 0.16 + 0.5)), math.max(2, math.floor(inner * 0.16 + 0.5)))
+    local core = math.max(2, math.floor(inner * 0.2 + 0.5))
+    sparkDot:SetSize(core, core)
+    sparkHalo:SetSize(math.max(core + 2, core * 2), math.max(core + 2, core * 2))
     if editing then
         editLabel:ClearAllPoints()
         editLabel:SetPoint("TOP", ringHolder, "BOTTOM", 0, -2)
@@ -343,6 +360,8 @@ local sliceThickness
 local pointsDirty = true
 local lineShown = {}
 local edgeShown = false
+local sparkShown = false
+local lastSparkX, lastSparkY
 local lastSpark
 local lastFillR, lastFillG, lastFillB, lastFillA
 local lastEdgeR, lastEdgeG, lastEdgeB, lastEdgeA, lastEdgeThick
@@ -400,9 +419,13 @@ local function HideWedges()
     if fullDisc then
         fullDisc:Hide()
     end
+    if sparkHalo then
+        sparkHalo:Hide()
+    end
     if sparkDot then
         sparkDot:Hide()
     end
+    sparkShown = false
 end
 
 local function HidePieLines()
@@ -483,17 +506,19 @@ local function PaintWedge(tex, size, angle1, angle2)
     tex:SetTexCoord(wedgeCoord.ULx, wedgeCoord.ULy, wedgeCoord.LLx, wedgeCoord.LLy, wedgeCoord.URx, wedgeCoord.URy, wedgeCoord.LRx, wedgeCoord.LRy)
 end
 
-local function PlaceSpark(shownAngle)
-    if not SparkOn() then
-        sparkDot:Hide()
-        return
+local function ShowSparkAt(x, y, qx, qy)
+    if not sparkShown or qx ~= lastSparkX or qy ~= lastSparkY then
+        sparkHalo:ClearAllPoints()
+        sparkDot:ClearAllPoints()
+        sparkHalo:SetPoint("CENTER", pieHolder, "CENTER", x, y)
+        sparkDot:SetPoint("CENTER", pieHolder, "CENTER", x, y)
+        lastSparkX, lastSparkY = qx, qy
     end
-    local radius = pieHolder:GetWidth() / 2
-    local theta = math.rad(shownAngle)
-    sparkDot:ClearAllPoints()
-    sparkDot:SetPoint("CENTER", pieHolder, "CENTER", math.sin(theta) * radius, math.cos(theta) * radius)
-    sparkDot:SetVertexColor(1, 0.96, 0.85, LineAlpha())
-    sparkDot:Show()
+    if not sparkShown then
+        sparkHalo:Show()
+        sparkDot:Show()
+        sparkShown = true
+    end
 end
 
 local function ShowSweep(angle1, angle2, r, g, b, alpha)
@@ -592,23 +617,18 @@ local function UpdatePie(progress)
     elseif colorChanged then
         PaintFillColor(r, g, b, alpha)
     end
-    local spark = SparkOn()
     local edgeOk = false
-    if edgeLine and progress > 0.001 and progress < 0.999 and shown > 0.002 and sliceRadius then
-        local er, eg, eb = r, g, b
-        if spark then
-            er, eg, eb = 1, 0.96, 0.85
-        end
+    local active = progress > 0.001 and progress < 0.999 and shown > 0.002 and sliceRadius
+    if edgeLine and active then
         local ea = LineAlpha()
         local lead = (grow and shown or progress) * pi * 2
         local edx = sin(lead) * sliceRadius
         local edy = cos(lead) * sliceRadius
         local qx = floor(edx * 4 + 0.5)
         local qy = floor(edy * 4 + 0.5)
-        local band = sliceThickness or 1
-        local wantThick = spark and max(2, band) or max(1, band * 0.55)
+        local wantThick = LineThickness()
         local moved = qx ~= lastEdgeX or qy ~= lastEdgeY
-        local recolor = er ~= lastEdgeR or eg ~= lastEdgeG or eb ~= lastEdgeB or ea ~= lastEdgeA or wantThick ~= lastEdgeThick
+        local recolor = r ~= lastEdgeR or g ~= lastEdgeG or b ~= lastEdgeB or ea ~= lastEdgeA or wantThick ~= lastEdgeThick
         if moved or recolor or not edgeShown then
             local ok = pcall(function()
                 if not edgeShown then
@@ -619,12 +639,12 @@ local function UpdatePie(progress)
                 end
                 if recolor or not edgeShown then
                     edgeLine:SetThickness(wantThick)
-                    edgeLine:SetColorTexture(er, eg, eb, ea)
+                    edgeLine:SetColorTexture(r, g, b, ea)
                 end
             end)
             if ok then
                 lastEdgeX, lastEdgeY = qx, qy
-                lastEdgeR, lastEdgeG, lastEdgeB, lastEdgeA = er, eg, eb, ea
+                lastEdgeR, lastEdgeG, lastEdgeB, lastEdgeA = r, g, b, ea
                 lastEdgeThick = wantThick
                 if not edgeShown then
                     edgeLine:Show()
@@ -638,9 +658,23 @@ local function UpdatePie(progress)
         else
             edgeOk = true
         end
-    elseif edgeShown then
-        edgeLine:Hide()
-        edgeShown = false
+        if edgeOk and SparkOn() and sparkDot and sparkHalo then
+            ShowSparkAt(edx, edy, qx, qy)
+        elseif sparkShown then
+            sparkHalo:Hide()
+            sparkDot:Hide()
+            sparkShown = false
+        end
+    else
+        if edgeShown then
+            edgeLine:Hide()
+            edgeShown = false
+        end
+        if sparkShown then
+            sparkHalo:Hide()
+            sparkDot:Hide()
+            sparkShown = false
+        end
     end
     return true
 end
@@ -1152,6 +1186,20 @@ function SimpleTweaksSwing.SetLineAlpha(a)
     if SimpleTweaksDB then
         SimpleTweaksDB.swingTimerLineA = ClampUnit(a, 1)
     end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetLineThickness(thickness)
+    thickness = tonumber(thickness) or 1
+    if thickness < 1 then
+        thickness = 1
+    elseif thickness > 8 then
+        thickness = 8
+    end
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerLineThickness = thickness
+    end
+    lastEdgeThick = nil
     RefreshText()
 end
 

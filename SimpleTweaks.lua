@@ -22,6 +22,7 @@ local DEFAULTS = {
     swingTimerBorderB = 0,
     swingTimerBorderA = 1,
     swingTimerLineA = 1,
+    swingTimerLineThickness = 1,
     swingTimerBackR = 0.02,
     swingTimerBackG = 0.02,
     swingTimerBackB = 0.02,
@@ -682,6 +683,53 @@ local function CreateOptionsWindow()
     lineLess:SetScript("OnClick", function() StepLine(-1) end)
     lineMore:SetScript("OnClick", function() StepLine(1) end)
     PaintLinePercent()
+
+    local thickLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    thickLabel:SetPoint("LEFT", lineMore, "RIGHT", 14, 0)
+    thickLabel:SetText("Dicke")
+    thickLabel:SetTextColor(0.75, 0.66, 0.5)
+    local thickLess = MakeFontStep("-")
+    local thickText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    thickText:SetTextColor(0.9, 0.79, 0.61)
+    thickText:SetWidth(16)
+    thickText:SetJustifyH("CENTER")
+    local thickMore = MakeFontStep("+")
+    thickLess:SetPoint("LEFT", thickLabel, "RIGHT", 8, 0)
+    thickText:SetPoint("LEFT", thickLess, "RIGHT", 2, 0)
+    thickMore:SetPoint("LEFT", thickText, "RIGHT", 2, 0)
+
+    local function CurrentThickness()
+        local value = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerLineThickness) or 1
+        if value < 1 then
+            return 1
+        end
+        if value > 8 then
+            return 8
+        end
+        return math.floor(value + 0.5)
+    end
+
+    local function PaintThickness()
+        thickText:SetText(tostring(CurrentThickness()))
+    end
+
+    local function StepThickness(direction)
+        local value = CurrentThickness() + direction
+        if value < 1 then
+            value = 1
+        elseif value > 8 then
+            value = 8
+        end
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetLineThickness then
+            SimpleTweaksSwing.SetLineThickness(value)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerLineThickness = value
+        end
+        PaintThickness()
+    end
+    thickLess:SetScript("OnClick", function() StepThickness(-1) end)
+    thickMore:SetScript("OnClick", function() StepThickness(1) end)
+    PaintThickness()
 
     return window
 end
