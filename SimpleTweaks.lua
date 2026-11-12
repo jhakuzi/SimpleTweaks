@@ -3,10 +3,14 @@ local DEFAULTS = {
     disableMapFade = true,
     hideMacroNames = true,
     hunterRangeIndicator = false,
+    swingTimer = false,
+    swingTimerFontSize = 18,
 }
 local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
 local optionChecks = {}
+local swingSizeText
+local SWING_FONT_SIZES = { 12, 14, 16, 18, 20, 24, 28, 32, 40 }
 local nameplateIndicators = {}
 local activeNameplateUnits = {}
 local rangeUpdateElapsed = 0
@@ -257,11 +261,14 @@ local function SetOption(setting, enabled)
         RefreshMacroNames()
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
+    elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
+        SimpleTweaksSwing.SetEnabled(enabled)
     end
     local messages = {
         disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
         hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
+        swingTimer = enabled and "Swing-Timer aktiviert." or "Swing-Timer deaktiviert.",
     }
     Print(messages[setting] or "Einstellung geändert.")
     if optionChecks[setting] then optionChecks[setting]:SetChecked(enabled) end
@@ -272,7 +279,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(470, 280)
+    window:SetSize(470, 324)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -306,6 +313,75 @@ local function CreateOptionsWindow()
     AddOption("disableMapFade", "Karte beim Bewegen nicht ausblenden", -68)
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
     AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
+    AddOption("swingTimer", "Swing-Timer", -200)
+
+    local function SwingFontSize()
+        local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerFontSize) or 18
+        local best, bestDiff = SWING_FONT_SIZES[1], math.huge
+        for _, candidate in ipairs(SWING_FONT_SIZES) do
+            local diff = math.abs(candidate - size)
+            if diff < bestDiff then
+                best, bestDiff = candidate, diff
+            end
+        end
+        return best
+    end
+
+    local function ApplySwingFontSize(size)
+        SimpleTweaksDB.swingTimerFontSize = size
+        if swingSizeText then
+            swingSizeText:SetText(tostring(size))
+        end
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetFontSize then
+            SimpleTweaksSwing.SetFontSize(size)
+        end
+    end
+
+    local function StepSwingFont(direction)
+        local size = SwingFontSize()
+        local index = 1
+        for i, candidate in ipairs(SWING_FONT_SIZES) do
+            if candidate == size then
+                index = i
+                break
+            end
+        end
+        index = index + direction
+        if index < 1 then
+            index = 1
+        elseif index > #SWING_FONT_SIZES then
+            index = #SWING_FONT_SIZES
+        end
+        ApplySwingFontSize(SWING_FONT_SIZES[index])
+    end
+
+    local function MakeFontStep(labelText)
+        local button = CreateFrame("Button", nil, window)
+        button:SetSize(22, 22)
+        local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("CENTER", 0, 1)
+        label:SetText(labelText)
+        label:SetTextColor(0.9, 0.79, 0.61)
+        button:SetScript("OnEnter", function() label:SetTextColor(1, 0.93, 0.75) end)
+        button:SetScript("OnLeave", function() label:SetTextColor(0.9, 0.79, 0.61) end)
+        button:SetScript("OnMouseDown", function() label:SetPoint("CENTER", 1, 0) end)
+        button:SetScript("OnMouseUp", function() label:SetPoint("CENTER", 0, 1) end)
+        return button
+    end
+
+    local swingCheck = optionChecks.swingTimer
+    local smaller = MakeFontStep("-")
+    swingSizeText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    swingSizeText:SetTextColor(0.9, 0.79, 0.61)
+    swingSizeText:SetWidth(28)
+    swingSizeText:SetJustifyH("CENTER")
+    swingSizeText:SetText(tostring(SwingFontSize()))
+    local larger = MakeFontStep("+")
+    smaller:SetPoint("LEFT", swingCheck.Text, "RIGHT", 14, 0)
+    swingSizeText:SetPoint("LEFT", smaller, "RIGHT", 2, 0)
+    larger:SetPoint("LEFT", swingSizeText, "RIGHT", 2, 0)
+    smaller:SetScript("OnClick", function() StepSwingFont(-1) end)
+    larger:SetScript("OnClick", function() StepSwingFont(1) end)
     return window
 end
 
@@ -329,6 +405,14 @@ local function HandleSlashCommand(message)
             SetOption("hideMacroNames", value == "on")
         else
             Print("Makronamen ausblenden: " .. (IsEnabled("hideMacroNames") and "an" or "aus") .. ". /tweaks makros an|aus")
+        end
+    elseif feature == "swing" or feature == "timer" or feature == "schwung" then
+        if value == "on" or value == "an" then
+            SetOption("swingTimer", true)
+        elseif value == "off" or value == "aus" then
+            SetOption("swingTimer", false)
+        else
+            Print("Swing-Timer: " .. (IsEnabled("swingTimer") and "an" or "aus") .. ". /tweaks swing an|aus")
         end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
@@ -386,6 +470,9 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     end
 
     RefreshMacroNames()
+    if SimpleTweaksSwing and SimpleTweaksSwing.Init then
+        SimpleTweaksSwing.Init()
+    end
     if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
         AddonCompartmentFrame:RegisterAddon({ text = "SimpleTweaks", icon = "Interface\\Icons\\INV_Misc_Gear_01", notCheckable = true, func = OpenOptions })
     end
