@@ -21,4 +21,4 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 - `/tweaks karte an|aus` schaltet das Ausblenden der Karte um.
 - `/tweaks makros an|aus` schaltet das Ausblenden der Makronamen um.
 - Das Einstellungsfenster enthält nur die Checkboxen der drei Funktionen und übernimmt Änderungen sofort.
-- **Jäger Reichweitenindikator** zeigt links neben gegnerischen Namensplaketten einen Punkt: Rot außerhalb der Reichweite, Orange in Nahkampfreichweite und Grün in Fernkampfreichweite. Die Reichweite wird anhand von Raptor Strike und Arcane Shot geprüft; wenn der Client keinen eindeutigen Wert liefert, bleibt der Punkt verborgen.
+- **Jäger Reichweitenindikator** zeigt links neben gegnerischen Namensplaketten einen Punkt: Rot außerhalb der Reichweite, Orange in Nahkampfreichweite und Grün in Auto-Schuss-Reichweite. Nahkampf wird mit einem 5-Yard-Gegenstandsreichweitentest geprüft, da Raptor Strike auf WoW Forever keine verlässliche Reichweitenabfrage liefert. Wenn der Client keinen eindeutigen Wert liefert, bleibt der Punkt verborgen.

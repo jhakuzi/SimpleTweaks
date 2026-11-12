@@ -10,6 +10,7 @@ local optionChecks = {}
 local nameplateIndicators = {}
 local activeNameplateUnits = {}
 local rangeUpdateElapsed = 0
+local meleeRangeItems = { 8149, 136605, 63427 }
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cffd6a45eSimpleTweaks:|r " .. message)
@@ -100,6 +101,22 @@ local function GetSpellRange(spellID, unit)
     return nil
 end
 
+local function GetMeleeRange(unit)
+    -- Raptor Strike has a 0–0/next-swing range entry in Forever, so its
+    -- spell range check can report "in range" at any distance. A five-yard
+    -- item check is the client-supported melee probe used by Forever addons.
+    local isItemInRange = C_Item and C_Item.IsItemInRange or IsItemInRange
+    if type(isItemInRange) ~= "function" then return nil end
+    for _, itemID in ipairs(meleeRangeItems) do
+        local ok, inRange = pcall(isItemInRange, itemID, unit)
+        if ok then
+            if inRange == true or inRange == 1 then return true end
+            if inRange == false or inRange == 0 then return false end
+        end
+    end
+    return nil
+end
+
 local function EnsureNameplateIndicator(unit)
     if type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then
         return nil
@@ -147,15 +164,17 @@ local function UpdateNameplateIndicator(unit)
         return
     end
 
-    -- Raptor Strike marks melee range; Arcane Shot marks the hunter's ranged
-    -- range. Unknown results stay hidden instead of implying a wrong distance.
-    local meleeRange = GetSpellRange(2973, unit)
-    local rangedRange = GetSpellRange(3044, unit)
+    -- Auto Shot (spell 75) is the relevant Hunter ranged band in Forever
+    -- (8–35 yd). Raptor Strike is unsuitable as a melee probe: its 0–0
+    -- next-swing range can read as in range at any distance. Unknown results
+    -- stay hidden instead of implying a wrong distance.
+    local meleeRange = GetMeleeRange(unit)
+    local rangedRange = GetSpellRange(75, unit)
     if meleeRange == true then
         SetIndicatorColor(indicator, "|cffffa500")
     elseif rangedRange == true then
         SetIndicatorColor(indicator, "|cff00ff00")
-    elseif meleeRange == false and rangedRange == false then
+    elseif rangedRange == false and meleeRange == false then
         SetIndicatorColor(indicator, "|cffff0000")
     else
         SetIndicatorColor(indicator, nil)
