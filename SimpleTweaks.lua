@@ -328,7 +328,7 @@ local function PlainBoolean(value)
 end
 
 local function IsFriendlyNpc(unit)
-    if type(UnitIsPlayer) ~= "function" or type(UnitCanAttack) ~= "function" then
+    if type(UnitIsPlayer) ~= "function" then
         return false
     end
     local isPlayer
@@ -338,41 +338,189 @@ local function IsFriendlyNpc(unit)
     if not ok or isPlayer ~= false then
         return false
     end
-    local hostile
+    if type(UnitIsEnemy) == "function" then
+        local enemy
+        ok = pcall(function()
+            enemy = PlainBoolean(UnitIsEnemy("player", unit))
+        end)
+        if not ok or enemy ~= false then
+            return false
+        end
+    end
+    if type(UnitCanAttack) == "function" then
+        local hostile
+        ok = pcall(function()
+            hostile = PlainBoolean(UnitCanAttack("player", unit))
+        end)
+        if not ok or hostile ~= false then
+            return false
+        end
+    end
+    if type(UnitIsFriend) == "function" then
+        local friend
+        ok = pcall(function()
+            friend = PlainBoolean(UnitIsFriend("player", unit))
+        end)
+        return ok and friend == true
+    end
+    if type(UnitReaction) ~= "function" then
+        return false
+    end
+    local reaction
     ok = pcall(function()
-        hostile = PlainBoolean(UnitCanAttack("player", unit))
+        reaction = UnitReaction("player", unit)
+        if issecretvalue and issecretvalue(reaction) then
+            reaction = nil
+        end
     end)
-    return ok and hostile == false
+    return ok and type(reaction) == "number" and reaction >= 5
+end
+
+local LEVEL_KEYS = { "LevelFrame", "PlayerLevelDiffFrame", "ClassificationFrame", "selectionHighlight" }
+
+local function HideWidget(widget)
+    if widget and widget.Hide and (not widget.IsShown or widget:IsShown()) then
+        widget:Hide()
+    end
+end
+
+local function ShowWidget(widget)
+    if widget and widget.Show then
+        widget:Show()
+    end
+end
+
+local function RememberLevelWidgets(plate, root)
+    if not root or not root.GetChildren or (root.IsForbidden and root:IsForbidden()) then
+        return
+    end
+    local list = plate.stLevelWidgets
+    if not list then
+        list = {}
+        plate.stLevelWidgets = list
+    end
+    local children = { root:GetChildren() }
+    for i = 1, #children do
+        local child = children[i]
+        local frameName = child.GetName and child:GetName()
+        if type(frameName) == "string" and frameName:find("Level") and not child.stNpcNoted then
+            child.stNpcNoted = true
+            list[#list + 1] = child
+        end
+    end
+end
+
+local function HideFriendlyChrome(plate, unitFrame)
+    if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+        return
+    end
+    HideWidget(unitFrame.HealthBarsContainer)
+    HideWidget(unitFrame.CastBar)
+    HideWidget(unitFrame.name)
+    for i = 1, #LEVEL_KEYS do
+        HideWidget(unitFrame[LEVEL_KEYS[i]])
+    end
+    local list = plate.stLevelWidgets
+    if list then
+        for i = 1, #list do
+            HideWidget(list[i])
+        end
+    end
 end
 
 local function RestoreNpcPlate(plate)
     if not plate then
         return
     end
+    plate.stNpcHidden = nil
+    plate.stNpcOnlyApplied = nil
     if plate.stNpcName then
         plate.stNpcName:Hide()
     end
     local unitFrame = plate.UnitFrame
-    if not plate.stNpcHidden or not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
-        plate.stNpcHidden = nil
+    if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
         return
     end
     if unitFrame.SetShowOnlyName then
         pcall(unitFrame.SetShowOnlyName, unitFrame, false)
     end
-    if unitFrame.HealthBarsContainer and unitFrame.HealthBarsContainer.Show then
-        unitFrame.HealthBarsContainer:Show()
+    ShowWidget(unitFrame.HealthBarsContainer)
+    ShowWidget(unitFrame.name)
+    ShowWidget(unitFrame.CastBar)
+    for i = 1, #LEVEL_KEYS do
+        ShowWidget(unitFrame[LEVEL_KEYS[i]])
     end
-    if unitFrame.name and unitFrame.name.Show then
-        unitFrame.name:Show()
+    local list = plate.stLevelWidgets
+    if list then
+        for i = 1, #list do
+            ShowWidget(list[i])
+        end
     end
-    if unitFrame.CastBar and unitFrame.CastBar.Show then
-        unitFrame.CastBar:Show()
+end
+
+local function PlayerNameStyle()
+    for unit in pairs(activeNameplateUnits) do
+        local isPlayer
+        local ok = pcall(function()
+            isPlayer = PlainBoolean(UnitIsPlayer(unit))
+        end)
+        if ok and isPlayer then
+            local plate = NamePlateFor(unit)
+            local unitFrame = plate and plate.UnitFrame
+            local fontString = unitFrame and unitFrame.name
+            if fontString and fontString.GetFont and not (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+                local font, size, flags
+                local scale = 1
+                ok = pcall(function()
+                    font, size, flags = fontString:GetFont()
+                    if fontString.GetEffectiveScale and UIParent.GetEffectiveScale then
+                        local fontScale = fontString:GetEffectiveScale()
+                        local parentScale = UIParent:GetEffectiveScale()
+                        if type(fontScale) == "number" and type(parentScale) == "number" and parentScale > 0 then
+                            scale = fontScale / parentScale
+                        end
+                    end
+                end)
+                if ok and type(font) == "string" and type(size) == "number" and size > 0 then
+                    return font, size * scale, flags
+                end
+            end
+        end
     end
-    if unitFrame.ClassificationFrame and unitFrame.ClassificationFrame.Show then
-        unitFrame.ClassificationFrame:Show()
+    return nil
+end
+
+local function ApplyNpcFont(name)
+    local font, size, flags = PlayerNameStyle()
+    if not font then
+        local fallback = GameFontHighlight or GameFontNormal
+        if fallback and fallback.GetFont then
+            font, size, flags = fallback:GetFont()
+        end
     end
-    plate.stNpcHidden = nil
+    if name.SetIgnoreParentScale and not name.stIgnoreScale then
+        name:SetIgnoreParentScale(true)
+        name.stIgnoreScale = true
+    end
+    if type(font) == "string" and type(size) == "number" and size > 0 and (name.stFont ~= font or name.stSize ~= size) then
+        pcall(name.SetFont, name, font, size, flags or "OUTLINE")
+        name.stFont = font
+        name.stSize = size
+    end
+end
+
+local function EnsureNpcWatcher(plate)
+    if plate.stNpcWatcher then
+        return
+    end
+    local watcher = CreateFrame("Frame", nil, plate)
+    watcher:SetScript("OnUpdate", function()
+        if not plate.stNpcHidden then
+            return
+        end
+        HideFriendlyChrome(plate, plate.UnitFrame)
+    end)
+    plate.stNpcWatcher = watcher
 end
 
 local function ApplyNpcNameOnly(unit)
@@ -381,7 +529,9 @@ local function ApplyNpcNameOnly(unit)
         return
     end
     if not IsEnabled("npcNameOnly") or not IsFriendlyNpc(unit) then
-        RestoreNpcPlate(plate)
+        if plate.stNpcHidden or plate.stNpcName then
+            RestoreNpcPlate(plate)
+        end
         return
     end
     local unitFrame = plate.UnitFrame
@@ -389,45 +539,32 @@ local function ApplyNpcNameOnly(unit)
         return
     end
     plate.stNpcHidden = true
-    if unitFrame.SetShowOnlyName then
+    RememberLevelWidgets(plate, unitFrame)
+    RememberLevelWidgets(plate, plate)
+    if not plate.stNpcOnlyApplied and unitFrame.SetShowOnlyName then
         pcall(unitFrame.SetShowOnlyName, unitFrame, true)
+        plate.stNpcOnlyApplied = true
     end
-    if unitFrame.HealthBarsContainer and unitFrame.HealthBarsContainer.Hide then
-        unitFrame.HealthBarsContainer:Hide()
-    end
-    if unitFrame.CastBar and unitFrame.CastBar.Hide then
-        unitFrame.CastBar:Hide()
-    end
-    if unitFrame.ClassificationFrame and unitFrame.ClassificationFrame.Hide then
-        unitFrame.ClassificationFrame:Hide()
-    end
-    if unitFrame.name and unitFrame.name.Hide then
-        unitFrame.name:Hide()
-    end
+    HideFriendlyChrome(plate, unitFrame)
+    EnsureNpcWatcher(plate)
     local name = plate.stNpcName
     if not name then
-        name = plate:CreateFontString(nil, "OVERLAY", "SystemFont_NamePlate")
-        if not name then
-            name = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        end
+        name = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         name:SetPoint("CENTER", plate, "CENTER", 0, 10)
-        local font, size = name:GetFont()
-        if font then
-            pcall(name.SetFont, name, font, size or 12, "OUTLINE")
-        end
         plate.stNpcName = name
     end
+    ApplyNpcFont(name)
     local okName, unitName = pcall(UnitName, unit)
-    if okName then
-        local wrote = pcall(function()
-            name:SetText(unitName)
-            name:SetTextColor(1, 1, 1)
-            name:Show()
-        end)
-        if not wrote then
-            name:Hide()
-        end
-    else
+    if not okName then
+        name:Hide()
+        return
+    end
+    local wrote = pcall(function()
+        name:SetText(unitName)
+        name:SetTextColor(1, 1, 1)
+        name:Show()
+    end)
+    if not wrote then
         name:Hide()
     end
 end
@@ -458,7 +595,7 @@ local function SetOption(setting, enabled)
         disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
         hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
         hideStanceBar = enabled and "Haltungsanzeige ausgeblendet." or "Haltungsanzeige wiederhergestellt.",
-        npcNameOnly = enabled and "NSCs zeigen nur den Namen." or "NSC-Namensplaketten wiederhergestellt.",
+        npcNameOnly = enabled and "Freundliche NSCs zeigen nur den Namen." or "NSC-Namensplaketten wiederhergestellt.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
     }
@@ -507,7 +644,7 @@ local function CreateOptionsWindow()
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
     AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
     AddOption("hideStanceBar", "Haltungsanzeige ausblenden", -200)
-    AddOption("npcNameOnly", "Bei NSCs nur Namen anzeigen", -244)
+    AddOption("npcNameOnly", "Bei freundlichen NSCs nur Namen anzeigen", -244)
     AddOption("swingTimer", "Schwungtimer", -288)
 
     local function MakeFontStep(labelText)
@@ -1035,7 +1172,7 @@ local function HandleSlashCommand(message)
         elseif value == "off" or value == "aus" then
             SetOption("npcNameOnly", false)
         else
-            Print("NSCs nur als Name: " .. (IsEnabled("npcNameOnly") and "an" or "aus") .. ". /tweaks nsc an|aus")
+            Print("Freundliche NSCs nur als Name: " .. (IsEnabled("npcNameOnly") and "an" or "aus") .. ". /tweaks nsc an|aus")
         end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
