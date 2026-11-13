@@ -35,7 +35,6 @@ local knownHands = {
 local driver = CreateFrame("Frame")
 local display = CreateFrame("Frame", "SimpleTweaksSwingTimer", UIParent)
 local text = display:CreateFontString(nil, "OVERLAY")
-local editLabel = display:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 local selection = CreateFrame("Frame", nil, display, "BackdropTemplate")
 local enabled = false
 local editing = false
@@ -317,7 +316,6 @@ local function EnsureCircle()
 end
 
 local geomSize
-local geomEditing
 local geomBand
 local RebuildSlices
 
@@ -325,24 +323,14 @@ local function ApplyCircleGeometry()
     EnsureCircle()
     local size = CircleSize()
     local thickness = BorderBand()
-    if size == geomSize and editing == geomEditing and thickness == geomBand then
+    if size == geomSize and thickness == geomBand then
         return
     end
     local inner = math.max(1, size - thickness * 2)
-    local width = size
-    local height = size
-    if editing then
-        width = math.max(size + 16, 130)
-        height = size + 22
-    end
-    display:SetSize(width, height)
+    display:SetSize(size, size)
     pieHolder:ClearAllPoints()
     pieHolder:SetSize(inner, inner)
-    if editing then
-        pieHolder:SetPoint("TOP", display, "TOP", 0, -(size - inner) / 2)
-    else
-        pieHolder:SetPoint("CENTER", display, "CENTER", 0, 0)
-    end
+    pieHolder:SetPoint("CENTER", display, "CENTER", 0, 0)
     pieHolder:SetFrameLevel(display:GetFrameLevel() + 2)
     ringHolder:ClearAllPoints()
     ringHolder:SetSize(size, size)
@@ -356,19 +344,11 @@ local function ApplyCircleGeometry()
     local core = math.max(2, math.floor(inner * 0.2 + 0.5))
     sparkDot:SetSize(core, core)
     sparkHalo:SetSize(math.max(core + 2, core * 2), math.max(core + 2, core * 2))
-    if editing then
-        editLabel:ClearAllPoints()
-        editLabel:SetPoint("TOP", ringHolder, "BOTTOM", 0, -2)
-        editLabel:Show()
-    else
-        editLabel:Hide()
-    end
     if selection and selection.SetFrameLevel then
         selection:SetFrameLevel(display:GetFrameLevel() + 8)
     end
     RebuildSlices()
     geomSize = size
-    geomEditing = editing
     geomBand = thickness
 end
 
@@ -1014,6 +994,21 @@ OnSwingUpdate = function(_, elapsed)
     RefreshText()
 end
 
+local function AnchorToCenter(cx, cy)
+    if not display or not display.GetCenter or not UIParent or not UIParent.GetCenter then
+        return
+    end
+    if not cx or not cy then
+        cx, cy = display:GetCenter()
+    end
+    local px, py = UIParent:GetCenter()
+    if not cx or not cy or not px or not py then
+        return
+    end
+    display:ClearAllPoints()
+    display:SetPoint("CENTER", UIParent, "CENTER", cx - px, cy - py)
+end
+
 function SimpleTweaksSwing.ApplyPosition()
     if dragging or not display then
         return
@@ -1032,6 +1027,9 @@ local function SavePosition()
     if not SimpleTweaksDB then
         return
     end
+    if display:IsShown() then
+        AnchorToCenter()
+    end
     local point, _, relativePoint, x, y = display:GetPoint(1)
     if type(point) ~= "string" then
         return
@@ -1049,6 +1047,10 @@ local function EnterEditMode()
     if editing then
         return
     end
+    local cx, cy
+    if display.GetCenter then
+        cx, cy = display:GetCenter()
+    end
     editing = true
     display.editing = true
     display:SetFrameStrata("TOOLTIP")
@@ -1056,7 +1058,6 @@ local function EnterEditMode()
     display:EnableMouse(true)
     selection:EnableMouse(true)
     selection:Show()
-    editLabel:Show()
     pieStamp = nil
     sampleStart = nil
     if layoutKey == "default" and C_EditMode and C_EditMode.GetLayouts then
@@ -1066,6 +1067,7 @@ local function EnterEditMode()
         end
     end
     RefreshText()
+    AnchorToCenter(cx, cy)
 end
 
 local function ExitEditMode()
@@ -1076,6 +1078,10 @@ local function ExitEditMode()
         display:StopMovingOrSizing()
         dragging = false
     end
+    local cx, cy
+    if display.GetCenter then
+        cx, cy = display:GetCenter()
+    end
     editing = false
     display.editing = false
     display:SetFrameStrata("HIGH")
@@ -1083,7 +1089,8 @@ local function ExitEditMode()
     display:EnableMouse(false)
     selection:EnableMouse(false)
     selection:Hide()
-    editLabel:Hide()
+    RefreshText()
+    AnchorToCenter(cx, cy)
     SavePosition()
     SimpleTweaksSwing.ApplyPosition()
     RefreshText()
@@ -1350,9 +1357,6 @@ end)
 display:Hide()
 
 text:Hide()
-editLabel:SetText("Schwungtimer")
-editLabel:SetTextColor(1, 0.86, 0.55)
-editLabel:Hide()
 
 selection:SetAllPoints()
 selection:EnableMouse(false)
