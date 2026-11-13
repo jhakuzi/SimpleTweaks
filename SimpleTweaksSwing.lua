@@ -405,20 +405,24 @@ function RebuildSlices()
         return
     end
     local outer = size / 2
-    local innerEdge = max(0, outer - band)
+    local midR = max(band / 2, outer - band / 2)
     local step = (pi * 2) / RING_COUNT
-    local thick = max(band + 0.75, (outer * 2 * pi / RING_COUNT) + 0.8)
+    local half = max(0.75, midR * step * 0.65)
     local br, bg, bb, ba = BorderColor()
     for i = 1, RING_COUNT do
         local line = ringLines[i]
         local angle = (i - 0.5) * step
-        local sx = sin(angle)
-        local sy = cos(angle)
-        line:SetThickness(thick)
+        local rx = sin(angle)
+        local ry = cos(angle)
+        local tx = ry
+        local ty = -rx
+        local cx = rx * midR
+        local cy = ry * midR
+        line:SetThickness(band)
         line:SetColorTexture(br, bg, bb, ba)
         pcall(function()
-            line:SetStartPoint("CENTER", ringHolder, sx * (innerEdge - 0.6), sy * (innerEdge - 0.6))
-            line:SetEndPoint("CENTER", ringHolder, sx * (outer + 0.2), sy * (outer + 0.2))
+            line:SetStartPoint("CENTER", ringHolder, cx - tx * half, cy - ty * half)
+            line:SetEndPoint("CENTER", ringHolder, cx + tx * half, cy + ty * half)
         end)
         if ba > 0.004 then
             line:Show()
