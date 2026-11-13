@@ -788,12 +788,24 @@ local function CreateOptionsWindow()
     thickMore:SetScript("OnClick", function() StepThickness(1) end)
     PaintThickness()
 
-    local previewAnchor = CreateFrame("Frame", nil, window)
-    previewAnchor:SetSize(64, 64)
-    previewAnchor:SetPoint("TOPRIGHT", -40, -248)
+    local previewBox = CreateFrame("Frame", nil, window, "BackdropTemplate")
+    previewBox:SetSize(96, 96)
+    previewBox:SetPoint("TOPRIGHT", -36, -248)
+    previewBox:EnableMouse(false)
+    previewBox:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    previewBox:SetBackdropColor(0.16, 0.15, 0.13, 1)
+    previewBox:SetBackdropBorderColor(0.45, 0.32, 0.16, 0.65)
+    local previewAnchor = CreateFrame("Frame", nil, previewBox)
+    previewAnchor:SetAllPoints()
     previewAnchor:EnableMouse(false)
     local previewLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    previewLabel:SetPoint("BOTTOM", previewAnchor, "TOP", 0, 8)
+    previewLabel:SetPoint("BOTTOM", previewBox, "TOP", 0, 6)
     previewLabel:SetText("Vorschau")
     previewLabel:SetTextColor(0.9, 0.79, 0.61)
 
