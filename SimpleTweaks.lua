@@ -4,6 +4,7 @@ local DEFAULTS = {
     hideMacroNames = true,
     hunterRangeIndicator = false,
     hideStanceBar = false,
+    npcNameOnly = false,
     swingTimer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,
@@ -305,6 +306,138 @@ local function SetNameplateIndicatorEnabled(enabled)
     UpdateNameplateIndicator(targetUnit)
 end
 
+local function NamePlateFor(unit)
+    if type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then
+        return nil
+    end
+    local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+    if not ok or not plate then
+        return nil
+    end
+    return plate
+end
+
+local function PlainBoolean(value)
+    if value == nil then
+        return nil
+    end
+    if issecretvalue and issecretvalue(value) then
+        return nil
+    end
+    return value and true or false
+end
+
+local function IsFriendlyNpc(unit)
+    if type(UnitIsPlayer) ~= "function" or type(UnitCanAttack) ~= "function" then
+        return false
+    end
+    local isPlayer
+    local ok = pcall(function()
+        isPlayer = PlainBoolean(UnitIsPlayer(unit))
+    end)
+    if not ok or isPlayer ~= false then
+        return false
+    end
+    local hostile
+    ok = pcall(function()
+        hostile = PlainBoolean(UnitCanAttack("player", unit))
+    end)
+    return ok and hostile == false
+end
+
+local function RestoreNpcPlate(plate)
+    if not plate then
+        return
+    end
+    if plate.stNpcName then
+        plate.stNpcName:Hide()
+    end
+    local unitFrame = plate.UnitFrame
+    if not plate.stNpcHidden or not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+        plate.stNpcHidden = nil
+        return
+    end
+    if unitFrame.SetShowOnlyName then
+        pcall(unitFrame.SetShowOnlyName, unitFrame, false)
+    end
+    if unitFrame.HealthBarsContainer and unitFrame.HealthBarsContainer.Show then
+        unitFrame.HealthBarsContainer:Show()
+    end
+    if unitFrame.name and unitFrame.name.Show then
+        unitFrame.name:Show()
+    end
+    if unitFrame.CastBar and unitFrame.CastBar.Show then
+        unitFrame.CastBar:Show()
+    end
+    if unitFrame.ClassificationFrame and unitFrame.ClassificationFrame.Show then
+        unitFrame.ClassificationFrame:Show()
+    end
+    plate.stNpcHidden = nil
+end
+
+local function ApplyNpcNameOnly(unit)
+    local plate = NamePlateFor(unit)
+    if not plate then
+        return
+    end
+    if not IsEnabled("npcNameOnly") or not IsFriendlyNpc(unit) then
+        RestoreNpcPlate(plate)
+        return
+    end
+    local unitFrame = plate.UnitFrame
+    if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
+        return
+    end
+    plate.stNpcHidden = true
+    if unitFrame.SetShowOnlyName then
+        pcall(unitFrame.SetShowOnlyName, unitFrame, true)
+    end
+    if unitFrame.HealthBarsContainer and unitFrame.HealthBarsContainer.Hide then
+        unitFrame.HealthBarsContainer:Hide()
+    end
+    if unitFrame.CastBar and unitFrame.CastBar.Hide then
+        unitFrame.CastBar:Hide()
+    end
+    if unitFrame.ClassificationFrame and unitFrame.ClassificationFrame.Hide then
+        unitFrame.ClassificationFrame:Hide()
+    end
+    if unitFrame.name and unitFrame.name.Hide then
+        unitFrame.name:Hide()
+    end
+    local name = plate.stNpcName
+    if not name then
+        name = plate:CreateFontString(nil, "OVERLAY", "SystemFont_NamePlate")
+        if not name then
+            name = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        end
+        name:SetPoint("CENTER", plate, "CENTER", 0, 10)
+        local font, size = name:GetFont()
+        if font then
+            pcall(name.SetFont, name, font, size or 12, "OUTLINE")
+        end
+        plate.stNpcName = name
+    end
+    local okName, unitName = pcall(UnitName, unit)
+    if okName then
+        local wrote = pcall(function()
+            name:SetText(unitName)
+            name:SetTextColor(1, 1, 1)
+            name:Show()
+        end)
+        if not wrote then
+            name:Hide()
+        end
+    else
+        name:Hide()
+    end
+end
+
+local function RefreshNpcNameOnly()
+    for unit in pairs(activeNameplateUnits) do
+        ApplyNpcNameOnly(unit)
+    end
+end
+
 local function SetOption(setting, enabled)
     SimpleTweaksDB[setting] = enabled
 
@@ -314,6 +447,8 @@ local function SetOption(setting, enabled)
         RefreshMacroNames()
     elseif setting == "hideStanceBar" then
         UpdateStanceBar()
+    elseif setting == "npcNameOnly" then
+        RefreshNpcNameOnly()
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
@@ -323,6 +458,7 @@ local function SetOption(setting, enabled)
         disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
         hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
         hideStanceBar = enabled and "Haltungsanzeige ausgeblendet." or "Haltungsanzeige wiederhergestellt.",
+        npcNameOnly = enabled and "NSCs zeigen nur den Namen." or "NSC-Namensplaketten wiederhergestellt.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
     }
@@ -336,7 +472,7 @@ local function CreateOptionsWindow()
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
     window:Hide()
-    window:SetSize(680, 424)
+    window:SetSize(680, 468)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -371,7 +507,8 @@ local function CreateOptionsWindow()
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
     AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
     AddOption("hideStanceBar", "Haltungsanzeige ausblenden", -200)
-    AddOption("swingTimer", "Schwungtimer", -244)
+    AddOption("npcNameOnly", "Bei NSCs nur Namen anzeigen", -244)
+    AddOption("swingTimer", "Schwungtimer", -288)
 
     local function MakeFontStep(labelText)
         local button = CreateFrame("Button", nil, window)
@@ -540,7 +677,7 @@ local function CreateOptionsWindow()
     end
 
     local groesseLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    groesseLabel:SetPoint("TOPLEFT", 52, -284)
+    groesseLabel:SetPoint("TOPLEFT", 52, -328)
     groesseLabel:SetText("Größe")
     groesseLabel:SetTextColor(0.75, 0.66, 0.5)
     local circleSmaller = MakeFontStep("-")
@@ -683,7 +820,7 @@ local function CreateOptionsWindow()
 
     local drainMode = MakeChoice("Abnehmend", 96)
     local fillMode = MakeChoice("Zunehmend", 96)
-    drainMode:SetPoint("TOPLEFT", 52, -320)
+    drainMode:SetPoint("TOPLEFT", 52, -364)
     fillMode:SetPoint("LEFT", drainMode, "RIGHT", 4, 0)
 
     local function CurrentPie()
@@ -726,7 +863,7 @@ local function CreateOptionsWindow()
     end)
 
     local lineLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    lineLabel:SetPoint("TOPLEFT", 52, -356)
+    lineLabel:SetPoint("TOPLEFT", 52, -400)
     lineLabel:SetText("Linie")
     lineLabel:SetTextColor(0.75, 0.66, 0.5)
     local lineLess = MakeFontStep("-")
@@ -816,7 +953,7 @@ local function CreateOptionsWindow()
 
     local previewBox = CreateFrame("Frame", nil, window, "BackdropTemplate")
     previewBox:SetSize(96, 96)
-    previewBox:SetPoint("TOPRIGHT", -36, -292)
+    previewBox:SetPoint("TOPRIGHT", -36, -336)
     previewBox:EnableMouse(false)
     previewBox:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -892,6 +1029,14 @@ local function HandleSlashCommand(message)
         else
             Print("Haltungsanzeige ausblenden: " .. (IsEnabled("hideStanceBar") and "an" or "aus") .. ". /tweaks haltung an|aus")
         end
+    elseif feature == "nsc" or feature == "npc" then
+        if value == "on" or value == "an" then
+            SetOption("npcNameOnly", true)
+        elseif value == "off" or value == "aus" then
+            SetOption("npcNameOnly", false)
+        else
+            Print("NSCs nur als Name: " .. (IsEnabled("npcNameOnly") and "an" or "aus") .. ". /tweaks nsc an|aus")
+        end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
             if value == "an" or value == "aus" then SetOption("disableMapFade", value == "an") else Print("Verwendung: /tweaks karte an|aus") end
@@ -921,8 +1066,11 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     if event == "NAME_PLATE_UNIT_ADDED" then
         activeNameplateUnits[loadedAddon] = true
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
+        if IsEnabled("npcNameOnly") then ApplyNpcNameOnly(loadedAddon) end
         return
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
+        local plate = NamePlateFor(loadedAddon)
+        if plate then RestoreNpcPlate(plate) end
         activeNameplateUnits[loadedAddon] = nil
         local entry = nameplateIndicators[loadedAddon]
         if entry then SetIndicatorColor(entry, nil) end
@@ -937,6 +1085,9 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         HookFutureMacroButtons()
         RefreshMacroNames()
         UpdateStanceBar()
+        if IsEnabled("npcNameOnly") then
+            RefreshNpcNameOnly()
+        end
         return
     end
     if event ~= "ADDON_LOADED" or loadedAddon ~= addonName then
@@ -982,6 +1133,9 @@ frame:SetScript("OnUpdate", function(_, elapsed)
         end
         if IsEnabled("hunterRangeIndicator") then
             SetNameplateIndicatorEnabled(true)
+        end
+        if IsEnabled("npcNameOnly") then
+            RefreshNpcNameOnly()
         end
     end
 end)
