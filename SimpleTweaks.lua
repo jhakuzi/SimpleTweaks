@@ -433,7 +433,6 @@ local function HideFriendlyChrome(plate, unitFrame)
     end
     HideWidget(plate, unitFrame.HealthBarsContainer)
     HideWidget(plate, unitFrame.CastBar)
-    HideWidget(plate, unitFrame.name)
     for i = 1, #LEVEL_KEYS do
         HideWidget(plate, unitFrame[LEVEL_KEYS[i]])
     end
@@ -445,6 +444,56 @@ local function HideFriendlyChrome(plate, unitFrame)
     end
 end
 
+local npcNameHolder
+
+local function NameHolder()
+    if not npcNameHolder then
+        npcNameHolder = CreateFrame("Frame")
+        npcNameHolder:Hide()
+    end
+    return npcNameHolder
+end
+
+local function ParkUnitName(plate, unitFrame)
+    local blizzardName = unitFrame and unitFrame.name
+    if not blizzardName or not blizzardName.SetParent or blizzardName.stNpcParked then
+        return
+    end
+    if blizzardName.IsForbidden and blizzardName:IsForbidden() then
+        return
+    end
+    plate.stNpcNameParent = blizzardName:GetParent()
+    if blizzardName.GetAlpha then
+        plate.stNpcNameAlpha = blizzardName:GetAlpha()
+    end
+    pcall(blizzardName.SetParent, blizzardName, NameHolder())
+    pcall(blizzardName.SetAlpha, blizzardName, 0)
+    blizzardName.stNpcParked = true
+    plate.stNpcParkedName = blizzardName
+end
+
+local function UnparkUnitName(plate)
+    local blizzardName = plate and plate.stNpcParkedName
+    if not blizzardName then
+        return
+    end
+    blizzardName.stNpcParked = nil
+    plate.stNpcParkedName = nil
+    if blizzardName.IsForbidden and blizzardName:IsForbidden() then
+        plate.stNpcNameParent = nil
+        plate.stNpcNameAlpha = nil
+        return
+    end
+    if plate.stNpcNameParent and blizzardName.SetParent then
+        pcall(blizzardName.SetParent, blizzardName, plate.stNpcNameParent)
+    end
+    if plate.stNpcNameAlpha ~= nil and blizzardName.SetAlpha then
+        pcall(blizzardName.SetAlpha, blizzardName, plate.stNpcNameAlpha)
+    end
+    plate.stNpcNameParent = nil
+    plate.stNpcNameAlpha = nil
+end
+
 local function RestoreNpcPlate(plate)
     if not plate then
         return
@@ -454,6 +503,7 @@ local function RestoreNpcPlate(plate)
     if plate.stNpcName then
         plate.stNpcName:Hide()
     end
+    UnparkUnitName(plate)
     local hidden = plate.stNpcHiddenWidgets
     plate.stNpcHiddenWidgets = nil
     if hidden then
@@ -523,20 +573,6 @@ local function ApplyNpcFont(name)
     end
 end
 
-local function EnsureNpcWatcher(plate)
-    if plate.stNpcWatcher then
-        return
-    end
-    local watcher = CreateFrame("Frame", nil, plate)
-    watcher:SetScript("OnUpdate", function()
-        if not plate.stNpcHidden then
-            return
-        end
-        HideFriendlyChrome(plate, plate.UnitFrame)
-    end)
-    plate.stNpcWatcher = watcher
-end
-
 local function ApplyNpcNameOnly(unit)
     local plate = NamePlateFor(unit)
     if not plate then
@@ -563,7 +599,7 @@ local function ApplyNpcNameOnly(unit)
         plate.stNpcOnlyApplied = true
     end
     HideFriendlyChrome(plate, unitFrame)
-    EnsureNpcWatcher(plate)
+    ParkUnitName(plate, unitFrame)
     local name = plate.stNpcName
     if not name then
         name = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
