@@ -1386,3 +1386,281 @@ function SimpleTweaksSwing.Init()
     SimpleTweaksSwing.ApplyPosition()
     SimpleTweaksSwing.SetEnabled(SimpleTweaksDB and SimpleTweaksDB.swingTimer)
 end
+
+local preview
+local pvSpan = { { 0, 0 }, { 0, 0 }, { 0, 0 } }
+
+local function PreviewSweep(wedges, holder, angle1, angle2, r, g, b, alpha)
+    local index1 = floor((angle1 + 45) / 90)
+    local index2 = floor((angle2 + 45) / 90)
+    local n = 1
+    pvSpan[1][1], pvSpan[1][2] = angle1, angle2
+    if index1 + 1 < index2 then
+        local mid = (index1 + 1) * 90 + 45
+        pvSpan[1][2] = mid
+        if index1 + 3 < index2 then
+            pvSpan[2][1], pvSpan[2][2] = mid, mid + 180
+            pvSpan[3][1], pvSpan[3][2] = mid + 180, angle2
+            n = 3
+        else
+            pvSpan[2][1], pvSpan[2][2] = mid, angle2
+            n = 2
+        end
+    end
+    local size = holder:GetWidth()
+    for i = 1, 3 do
+        local tex = wedges[i]
+        if i <= n then
+            tex:SetVertexColor(r, g, b, alpha)
+            if pcall(PaintWedge, tex, size, pvSpan[i][1], pvSpan[i][2]) then
+                tex:Show()
+            else
+                tex:Hide()
+            end
+        elseif tex:IsShown() then
+            tex:Hide()
+        end
+    end
+end
+
+local function EnsurePreview(parent)
+    if preview then
+        preview.root:SetParent(parent)
+        return preview
+    end
+    local root = CreateFrame("Frame", nil, parent)
+    root:EnableMouse(false)
+    local pie = CreateFrame("Frame", nil, root)
+    pie:EnableMouse(false)
+    local ring = CreateFrame("Frame", nil, root)
+    ring:EnableMouse(false)
+    local fill = PrepareDisc(root, "BACKGROUND", 1)
+    local disc = PrepareDisc(pie, "ARTWORK", 0)
+    local wedges = {}
+    for i = 1, 3 do
+        local tex = PrepareDisc(pie, "ARTWORK", i)
+        tex:SetAllPoints()
+        wedges[i] = tex
+    end
+    local halo = PrepareDisc(pie, "OVERLAY", 6)
+    local dot = PrepareDisc(pie, "OVERLAY", 7)
+    halo:SetVertexColor(1, 0.97, 0.82, 0.38)
+    dot:SetVertexColor(1, 1, 0.92, 1)
+    local lines = {}
+    local edge
+    if ring.CreateLine then
+        for i = 1, RING_COUNT do
+            local line = ring:CreateLine(nil, "ARTWORK")
+            line:Hide()
+            lines[i] = line
+        end
+        edge = pie:CreateLine(nil, "OVERLAY", nil, 7)
+        edge:Hide()
+    end
+    preview = {
+        root = root,
+        pie = pie,
+        ring = ring,
+        fill = fill,
+        disc = disc,
+        wedges = wedges,
+        halo = halo,
+        dot = dot,
+        lines = lines,
+        edge = edge,
+        edgeOn = false,
+        sparkOn = false,
+        discOn = false,
+    }
+    return preview
+end
+
+local function LayoutPreview(p)
+    local size = CircleSize()
+    local band = BorderBand()
+    if p.size == size and p.band == band then
+        return
+    end
+    p.size = size
+    p.band = band
+    local inner = max(1, size - band * 2)
+    p.root:SetSize(size, size)
+    p.ring:SetFrameLevel(p.root:GetFrameLevel() + 1)
+    p.pie:SetFrameLevel(p.root:GetFrameLevel() + 2)
+    p.pie:ClearAllPoints()
+    p.pie:SetSize(inner, inner)
+    p.pie:SetPoint("CENTER", p.root, "CENTER", 0, 0)
+    p.ring:ClearAllPoints()
+    p.ring:SetSize(size, size)
+    p.ring:SetPoint("CENTER", p.pie, "CENTER", 0, 0)
+    p.fill:ClearAllPoints()
+    p.fill:SetSize(inner, inner)
+    p.fill:SetPoint("CENTER", p.pie, "CENTER", 0, 0)
+    p.disc:ClearAllPoints()
+    p.disc:SetAllPoints(p.pie)
+    local core = max(2, floor(inner * 0.2 + 0.5))
+    p.dot:SetSize(core, core)
+    p.halo:SetSize(max(core + 2, core * 2), max(core + 2, core * 2))
+    p.edgeOn = false
+    if not p.lines[1] then
+        return
+    end
+    local outer = size / 2
+    local midR = max(band / 2, outer - band / 2)
+    local step = (pi * 2) / RING_COUNT
+    local half = max(0.75, midR * step * 0.65)
+    local br, bg, bb, ba = BorderColor()
+    p.br, p.bg, p.bb, p.ba = br, bg, bb, ba
+    for i = 1, RING_COUNT do
+        local line = p.lines[i]
+        local angle = (i - 0.5) * step
+        local rx = sin(angle)
+        local ry = cos(angle)
+        local tx = ry
+        local ty = -rx
+        local cx = rx * midR
+        local cy = ry * midR
+        line:SetThickness(band)
+        line:SetColorTexture(br, bg, bb, ba)
+        pcall(function()
+            line:SetStartPoint("CENTER", p.ring, cx - tx * half, cy - ty * half)
+            line:SetEndPoint("CENTER", p.ring, cx + tx * half, cy + ty * half)
+        end)
+        if ba > 0.004 then
+            line:Show()
+        else
+            line:Hide()
+        end
+    end
+end
+
+local function DrawPreview(progress)
+    local p = preview
+    if not p then
+        return
+    end
+    LayoutPreview(p)
+    local br, bg, bb, ba = BorderColor()
+    if br ~= p.br or bg ~= p.bg or bb ~= p.bb or ba ~= p.ba then
+        p.br, p.bg, p.bb, p.ba = br, bg, bb, ba
+        for i = 1, #p.lines do
+            local line = p.lines[i]
+            line:SetColorTexture(br, bg, bb, ba)
+            if ba > 0.004 then
+                line:Show()
+            else
+                line:Hide()
+            end
+        end
+    end
+    local backR, backG, backB, backA = BackColor()
+    if backR ~= p.backR or backG ~= p.backG or backB ~= p.backB or backA ~= p.backA then
+        p.backR, p.backG, p.backB, p.backA = backR, backG, backB, backA
+        p.fill:SetVertexColor(backR, backG, backB, backA)
+    end
+    p.fill:Show()
+    p.ring:Show()
+    p.pie:Show()
+    local alpha = (0.5 + 0.5 * progress) * CircleAlpha()
+    local r, g, b = CircleColor()
+    local grow = PieFills()
+    local shown = grow and progress or (1 - progress)
+    if shown < 0 then
+        shown = 0
+    elseif shown > 1 then
+        shown = 1
+    end
+    local deg = floor(shown * 360 + 0.5)
+    if shown >= 0.995 then
+        for i = 1, 3 do
+            p.wedges[i]:Hide()
+        end
+        p.disc:SetVertexColor(r, g, b, alpha)
+        p.disc:Show()
+        p.discOn = true
+    elseif shown <= 0.002 then
+        for i = 1, 3 do
+            p.wedges[i]:Hide()
+        end
+        if p.discOn then
+            p.disc:Hide()
+            p.discOn = false
+        end
+    else
+        if p.discOn then
+            p.disc:Hide()
+            p.discOn = false
+        end
+        if grow then
+            PreviewSweep(p.wedges, p.pie, 0, deg, r, g, b, alpha)
+        else
+            PreviewSweep(p.wedges, p.pie, 360 - deg, 360, r, g, b, alpha)
+        end
+    end
+    local radius = p.pie:GetWidth() / 2
+    local active = progress > 0.001 and progress < 0.999 and shown > 0.002 and radius > 0
+    if p.edge and active then
+        local lead = (grow and shown or progress) * pi * 2
+        local ex = sin(lead) * radius
+        local ey = cos(lead) * radius
+        local ok = pcall(function()
+            p.edge:SetStartPoint("CENTER", p.pie, 0, 0)
+            p.edge:SetEndPoint("CENTER", p.pie, ex, ey)
+            p.edge:SetThickness(LineThickness())
+            p.edge:SetColorTexture(r, g, b, LineAlpha())
+        end)
+        if ok then
+            p.edge:Show()
+            p.edgeOn = true
+            if SparkOn() then
+                p.halo:ClearAllPoints()
+                p.dot:ClearAllPoints()
+                p.halo:SetPoint("CENTER", p.pie, "CENTER", ex, ey)
+                p.dot:SetPoint("CENTER", p.pie, "CENTER", ex, ey)
+                p.halo:Show()
+                p.dot:Show()
+                p.sparkOn = true
+            elseif p.sparkOn then
+                p.halo:Hide()
+                p.dot:Hide()
+                p.sparkOn = false
+            end
+        end
+    else
+        if p.edgeOn and p.edge then
+            p.edge:Hide()
+            p.edgeOn = false
+        end
+        if p.sparkOn then
+            p.halo:Hide()
+            p.dot:Hide()
+            p.sparkOn = false
+        end
+    end
+end
+
+function SimpleTweaksSwing.SetPreview(parent, on)
+    if not on or not parent then
+        if preview then
+            preview.root:SetScript("OnUpdate", nil)
+            preview.root:Hide()
+        end
+        return
+    end
+    local p = EnsurePreview(parent)
+    p.root:ClearAllPoints()
+    p.root:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    p.root:Show()
+    p.size = nil
+    local wait = 0
+    p.root:SetScript("OnUpdate", function(_, elapsed)
+        wait = wait + elapsed
+        if wait < 0.033 then
+            return
+        end
+        wait = 0
+        local progress = (GetTime() % 2.4) / 2.4
+        DrawPreview(progress)
+    end)
+    DrawPreview((GetTime() % 2.4) / 2.4)
+end

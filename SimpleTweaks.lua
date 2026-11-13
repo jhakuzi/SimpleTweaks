@@ -310,7 +310,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
-    window:SetSize(470, 380)
+    window:SetSize(680, 380)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -786,6 +786,35 @@ local function CreateOptionsWindow()
     thickLess:SetScript("OnClick", function() StepThickness(-1) end)
     thickMore:SetScript("OnClick", function() StepThickness(1) end)
     PaintThickness()
+
+    local previewLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    previewLabel:SetPoint("TOPRIGHT", -78, -210)
+    previewLabel:SetText("Vorschau")
+    previewLabel:SetTextColor(0.9, 0.79, 0.61)
+    local previewWell = CreateFrame("Frame", nil, window, "BackdropTemplate")
+    previewWell:SetSize(156, 156)
+    previewWell:SetPoint("TOPRIGHT", -24, -232)
+    previewWell:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    previewWell:SetBackdropColor(0.09, 0.1, 0.09, 1)
+    previewWell:SetBackdropBorderColor(0.55, 0.36, 0.16, 0.85)
+    previewWell:EnableMouse(false)
+
+    window:SetScript("OnShow", function()
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetPreview then
+            SimpleTweaksSwing.SetPreview(previewWell, true)
+        end
+    end)
+    window:SetScript("OnHide", function()
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetPreview then
+            SimpleTweaksSwing.SetPreview(nil, false)
+        end
+    end)
 
     return window
 end
