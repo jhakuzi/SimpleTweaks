@@ -113,30 +113,29 @@ local function ShouldHideStance()
 end
 
 local function UpdateStanceBar()
+    if InCombatLockdown and InCombatLockdown() then
+        return
+    end
     local frames = { StanceBar, StanceBarFrame, ShapeshiftBarFrame }
     local hide = ShouldHideStance()
-    local locked = InCombatLockdown and InCombatLockdown()
     for i = 1, #frames do
         local frame = frames[i]
         if frame then
+            if type(UnregisterStateDriver) == "function" then
+                pcall(UnregisterStateDriver, frame, "visibility")
+            end
             if hide then
                 frame.stHiddenByTweaks = true
-                if not locked then
-                    if type(RegisterStateDriver) == "function" then
-                        pcall(RegisterStateDriver, frame, "visibility", "hide")
-                    end
-                    frame:Hide()
+                if not frame.GetAlpha or frame:GetAlpha() ~= 0 then
+                    frame:SetAlpha(0)
                 end
-            elseif frame.stHiddenByTweaks and not locked then
-                if type(UnregisterStateDriver) == "function" then
-                    pcall(UnregisterStateDriver, frame, "visibility")
-                end
+            elseif frame.stHiddenByTweaks then
                 frame.stHiddenByTweaks = nil
-                frame:Show()
-                if type(StanceBarFrame_Update) == "function" then
-                    pcall(StanceBarFrame_Update)
-                elseif frame.Update then
-                    pcall(frame.Update, frame)
+                if not frame.GetAlpha or frame:GetAlpha() ~= 1 then
+                    frame:SetAlpha(1)
+                end
+                if frame.IsShown and not frame:IsShown() then
+                    frame:Show()
                 end
             end
         end
