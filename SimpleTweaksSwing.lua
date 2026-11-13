@@ -123,6 +123,23 @@ local function CircleSize()
     return math.floor(size + 0.5)
 end
 
+local function BorderBand()
+    local size = CircleSize()
+    local cap = max(1, floor((size - 1) / 2))
+    local value = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerBorderThickness)
+    local band = value or max(1, floor(size / 9 + 0.5))
+    band = floor(band + 0.5)
+    if band < 1 then
+        band = 1
+    elseif band > cap then
+        band = cap
+    end
+    if band > 8 then
+        band = 8
+    end
+    return band
+end
+
 local function CircleColor()
     local db = SimpleTweaksDB
     return ClampUnit(db and db.swingTimerCircleR, 1), ClampUnit(db and db.swingTimerCircleG, 0.86), ClampUnit(db and db.swingTimerCircleB, 0.55)
@@ -301,15 +318,16 @@ end
 
 local geomSize
 local geomEditing
+local geomBand
 local RebuildSlices
 
 local function ApplyCircleGeometry()
     EnsureCircle()
     local size = CircleSize()
-    if size == geomSize and editing == geomEditing then
+    local thickness = BorderBand()
+    if size == geomSize and editing == geomEditing and thickness == geomBand then
         return
     end
-    local thickness = math.max(1, math.floor(size / 9 + 0.5))
     local inner = math.max(1, size - thickness * 2)
     local width = size
     local height = size
@@ -351,6 +369,7 @@ local function ApplyCircleGeometry()
     RebuildSlices()
     geomSize = size
     geomEditing = editing
+    geomBand = thickness
 end
 
 local sliceDX = {}
@@ -374,7 +393,7 @@ local linesBroken = false
 
 function RebuildSlices()
     local size = CircleSize()
-    local band = max(1, floor(size / 9 + 0.5))
+    local band = BorderBand()
     local radius = max(1, (size - band * 2) / 2)
     if radius == sliceRadius and band == sliceThickness then
         return
@@ -1149,6 +1168,23 @@ function SimpleTweaksSwing.SetCircleColor(r, g, b, a)
             SimpleTweaksDB.swingTimerCircleA = ClampUnit(a, 1)
         end
     end
+    RefreshText()
+end
+
+function SimpleTweaksSwing.SetBorderThickness(thickness)
+    thickness = tonumber(thickness) or 1
+    if thickness < 1 then
+        thickness = 1
+    elseif thickness > 8 then
+        thickness = 8
+    end
+    if SimpleTweaksDB then
+        SimpleTweaksDB.swingTimerBorderThickness = thickness
+    end
+    geomSize = nil
+    sliceRadius = nil
+    lastSweepDeg = nil
+    ApplyCircleGeometry()
     RefreshText()
 end
 

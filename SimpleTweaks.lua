@@ -527,6 +527,8 @@ local function CreateOptionsWindow()
     circleSizeText:SetPoint("LEFT", circleSmaller, "RIGHT", 2, 0)
     circleLarger:SetPoint("LEFT", circleSizeText, "RIGHT", 2, 0)
 
+    local PaintRahmen
+
     local function StepCircle(direction)
         local size = CurrentCircleSize()
         local index = 1
@@ -545,6 +547,9 @@ local function CreateOptionsWindow()
         local nextSize = SWING_CIRCLE_SIZES[index]
         circleSizeText:SetText(tostring(nextSize))
         ApplyCircleSize(nextSize)
+        if PaintRahmen then
+            PaintRahmen()
+        end
     end
     circleSmaller:SetScript("OnClick", function() StepCircle(-1) end)
     circleLarger:SetScript("OnClick", function() StepCircle(1) end)
@@ -597,6 +602,57 @@ local function CreateOptionsWindow()
     fillSwatch:SetPoint("LEFT", circleLarger, "RIGHT", 12, 0)
     edgeSwatch:SetPoint("LEFT", fillSwatch, "RIGHT", 6, 0)
     backSwatch:SetPoint("LEFT", edgeSwatch, "RIGHT", 6, 0)
+
+    local rahmenLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    rahmenLabel:SetPoint("LEFT", backSwatch, "RIGHT", 12, 0)
+    rahmenLabel:SetText("Rahmen")
+    rahmenLabel:SetTextColor(0.75, 0.66, 0.5)
+    local rahmenLess = MakeFontStep("-")
+    local rahmenText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    rahmenText:SetTextColor(0.9, 0.79, 0.61)
+    rahmenText:SetWidth(16)
+    rahmenText:SetJustifyH("CENTER")
+    local rahmenMore = MakeFontStep("+")
+    rahmenLess:SetPoint("LEFT", rahmenLabel, "RIGHT", 6, 0)
+    rahmenText:SetPoint("LEFT", rahmenLess, "RIGHT", 2, 0)
+    rahmenMore:SetPoint("LEFT", rahmenText, "RIGHT", 2, 0)
+
+    local function CurrentBorder()
+        local value = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerBorderThickness)
+        if not value then
+            local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerCircleSize) or 9
+            value = math.max(1, math.floor(size / 9 + 0.5))
+        end
+        if value < 1 then
+            return 1
+        end
+        if value > 8 then
+            return 8
+        end
+        return math.floor(value + 0.5)
+    end
+
+    function PaintRahmen()
+        rahmenText:SetText(tostring(CurrentBorder()))
+    end
+
+    local function StepRahmen(direction)
+        local value = CurrentBorder() + direction
+        if value < 1 then
+            value = 1
+        elseif value > 8 then
+            value = 8
+        end
+        if SimpleTweaksSwing and SimpleTweaksSwing.SetBorderThickness then
+            SimpleTweaksSwing.SetBorderThickness(value)
+        elseif SimpleTweaksDB then
+            SimpleTweaksDB.swingTimerBorderThickness = value
+        end
+        PaintRahmen()
+    end
+    rahmenLess:SetScript("OnClick", function() StepRahmen(-1) end)
+    rahmenMore:SetScript("OnClick", function() StepRahmen(1) end)
+    PaintRahmen()
 
     local drainMode = MakeChoice("Abnehmend", 96)
     local fillMode = MakeChoice("Zunehmend", 96)
