@@ -3,6 +3,7 @@ local DEFAULTS = {
     disableMapFade = true,
     hideMacroNames = true,
     hunterRangeIndicator = false,
+    hideStanceBar = false,
     swingTimer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,
@@ -106,6 +107,59 @@ local function HookFutureMacroButtons()
         if type(mixin) == "table" and type(mixin.Update) == "function" and not mixin.simpleTweaksMacroHook then
             hooksecurefunc(mixin, "Update", UpdateMacroName)
             mixin.simpleTweaksMacroHook = true
+        end
+    end
+end
+
+local stanceHooked = {}
+local stanceEditHooked = false
+
+local function ShouldHideStance()
+    if not IsEnabled("hideStanceBar") then
+        return false
+    end
+    if EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown() then
+        return false
+    end
+    return true
+end
+
+local function HookStanceFrame(frame)
+    if not frame or stanceHooked[frame] or not frame.HookScript then
+        return
+    end
+    stanceHooked[frame] = true
+    frame:HookScript("OnShow", function(self)
+        if ShouldHideStance() then
+            self:Hide()
+        end
+    end)
+end
+
+local function UpdateStanceBar()
+    if EditModeManagerFrame and EditModeManagerFrame.HookScript and not stanceEditHooked then
+        stanceEditHooked = true
+        pcall(EditModeManagerFrame.HookScript, EditModeManagerFrame, "OnShow", UpdateStanceBar)
+        pcall(EditModeManagerFrame.HookScript, EditModeManagerFrame, "OnHide", UpdateStanceBar)
+    end
+    local frames = { StanceBar, StanceBarFrame, ShapeshiftBarFrame }
+    local hide = ShouldHideStance()
+    for i = 1, #frames do
+        local frame = frames[i]
+        if frame then
+            HookStanceFrame(frame)
+            if hide then
+                frame.stHiddenByTweaks = true
+                frame:Hide()
+            elseif frame.stHiddenByTweaks then
+                frame.stHiddenByTweaks = nil
+                frame:Show()
+                if type(StanceBarFrame_Update) == "function" then
+                    pcall(StanceBarFrame_Update)
+                elseif frame.Update then
+                    pcall(frame.Update, frame)
+                end
+            end
         end
     end
 end
@@ -290,6 +344,8 @@ local function SetOption(setting, enabled)
         UpdateMapFade(enabled)
     elseif setting == "hideMacroNames" then
         RefreshMacroNames()
+    elseif setting == "hideStanceBar" then
+        UpdateStanceBar()
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
@@ -298,6 +354,7 @@ local function SetOption(setting, enabled)
     local messages = {
         disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
         hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
+        hideStanceBar = enabled and "Haltungsanzeige ausgeblendet." or "Haltungsanzeige wiederhergestellt.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
     }
@@ -311,7 +368,7 @@ local function CreateOptionsWindow()
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
     window:Hide()
-    window:SetSize(680, 380)
+    window:SetSize(680, 424)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -345,7 +402,8 @@ local function CreateOptionsWindow()
     AddOption("disableMapFade", "Karte beim Bewegen nicht ausblenden", -68)
     AddOption("hideMacroNames", "Makronamen auf Aktionsleisten ausblenden", -112)
     AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
-    AddOption("swingTimer", "Schwungtimer", -200)
+    AddOption("hideStanceBar", "Haltungsanzeige ausblenden", -200)
+    AddOption("swingTimer", "Schwungtimer", -244)
 
     local function MakeFontStep(labelText)
         local button = CreateFrame("Button", nil, window)
@@ -514,7 +572,7 @@ local function CreateOptionsWindow()
     end
 
     local groesseLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    groesseLabel:SetPoint("TOPLEFT", 52, -240)
+    groesseLabel:SetPoint("TOPLEFT", 52, -284)
     groesseLabel:SetText("Größe")
     groesseLabel:SetTextColor(0.75, 0.66, 0.5)
     local circleSmaller = MakeFontStep("-")
@@ -657,7 +715,7 @@ local function CreateOptionsWindow()
 
     local drainMode = MakeChoice("Abnehmend", 96)
     local fillMode = MakeChoice("Zunehmend", 96)
-    drainMode:SetPoint("TOPLEFT", 52, -276)
+    drainMode:SetPoint("TOPLEFT", 52, -320)
     fillMode:SetPoint("LEFT", drainMode, "RIGHT", 4, 0)
 
     local function CurrentPie()
@@ -700,7 +758,7 @@ local function CreateOptionsWindow()
     end)
 
     local lineLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    lineLabel:SetPoint("TOPLEFT", 52, -312)
+    lineLabel:SetPoint("TOPLEFT", 52, -356)
     lineLabel:SetText("Linie")
     lineLabel:SetTextColor(0.75, 0.66, 0.5)
     local lineLess = MakeFontStep("-")
@@ -790,7 +848,7 @@ local function CreateOptionsWindow()
 
     local previewBox = CreateFrame("Frame", nil, window, "BackdropTemplate")
     previewBox:SetSize(96, 96)
-    previewBox:SetPoint("TOPRIGHT", -36, -248)
+    previewBox:SetPoint("TOPRIGHT", -36, -292)
     previewBox:EnableMouse(false)
     previewBox:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -858,6 +916,14 @@ local function HandleSlashCommand(message)
         else
             Print("Schwungtimer: " .. (IsEnabled("swingTimer") and "an" or "aus") .. ". /tweaks schwung an|aus")
         end
+    elseif feature == "haltung" or feature == "stance" then
+        if value == "on" or value == "an" then
+            SetOption("hideStanceBar", true)
+        elseif value == "off" or value == "aus" then
+            SetOption("hideStanceBar", false)
+        else
+            Print("Haltungsanzeige ausblenden: " .. (IsEnabled("hideStanceBar") and "an" or "aus") .. ". /tweaks haltung an|aus")
+        end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
             if value == "an" or value == "aus" then SetOption("disableMapFade", value == "an") else Print("Verwendung: /tweaks karte an|aus") end
@@ -881,6 +947,8 @@ pcall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
 pcall(frame.RegisterEvent, frame, "ACTIONBAR_SLOT_CHANGED")
 pcall(frame.RegisterEvent, frame, "UPDATE_BONUS_ACTIONBAR")
 pcall(frame.RegisterEvent, frame, "ACTIONBAR_PAGE_CHANGED")
+pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORM")
+pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORMS")
 frame:SetScript("OnEvent", function(_, event, loadedAddon)
     if event == "NAME_PLATE_UNIT_ADDED" then
         activeNameplateUnits[loadedAddon] = true
@@ -897,9 +965,10 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     elseif event == "PLAYER_TARGET_CHANGED" then
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
         return
-    elseif event == "PLAYER_ENTERING_WORLD" or event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "ACTIONBAR_PAGE_CHANGED" then
+    elseif event == "PLAYER_ENTERING_WORLD" or event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_SHAPESHIFT_FORMS" then
         HookFutureMacroButtons()
         RefreshMacroNames()
+        UpdateStanceBar()
         return
     end
     if event ~= "ADDON_LOADED" or loadedAddon ~= addonName then
@@ -923,6 +992,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 
     RefreshMacroNames()
     HookFutureMacroButtons()
+    UpdateStanceBar()
     if SimpleTweaksSwing and SimpleTweaksSwing.Init then
         SimpleTweaksSwing.Init()
     end
