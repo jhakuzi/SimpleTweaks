@@ -2,7 +2,7 @@
 ## Title: SimpleTweaks
 ## Notes: Small quality-of-life tweaks for World of Warcraft: Forever.
 ## Author: SimpleTweaks
-## Version: 1.2.22
+## Version: 1.2.23
 ## SavedVariables: SimpleTweaksDB
 
 SimpleTweaks.lua
