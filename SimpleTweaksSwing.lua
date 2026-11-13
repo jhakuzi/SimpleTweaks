@@ -1140,12 +1140,19 @@ function SimpleTweaksSwing.SetStyle(style)
     RefreshText()
 end
 
+local function RefreshPreviewNow()
+    if SimpleTweaksSwing.RefreshPreview then
+        SimpleTweaksSwing.RefreshPreview()
+    end
+end
+
 function SimpleTweaksSwing.SetPie(direction)
     if SimpleTweaksDB then
         SimpleTweaksDB.swingTimerPie = direction == "fill" and "fill" or "drain"
     end
     pieStamp = nil
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetSpark(on)
@@ -1153,6 +1160,7 @@ function SimpleTweaksSwing.SetSpark(on)
         SimpleTweaksDB.swingTimerSpark = on and true or false
     end
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetCircleSize(size)
@@ -1161,6 +1169,7 @@ function SimpleTweaksSwing.SetCircleSize(size)
     end
     ApplyCircleGeometry()
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetCircleColor(r, g, b, a)
@@ -1173,6 +1182,7 @@ function SimpleTweaksSwing.SetCircleColor(r, g, b, a)
         end
     end
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetBorderThickness(thickness)
@@ -1190,6 +1200,7 @@ function SimpleTweaksSwing.SetBorderThickness(thickness)
     lastSweepDeg = nil
     ApplyCircleGeometry()
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetBorderColor(r, g, b, a)
@@ -1205,6 +1216,7 @@ function SimpleTweaksSwing.SetBorderColor(r, g, b, a)
         circleBorder:SetColorTexture(BorderColor())
     end
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetBackColor(r, g, b, a)
@@ -1220,6 +1232,7 @@ function SimpleTweaksSwing.SetBackColor(r, g, b, a)
         circleFill:SetColorTexture(BackColor())
     end
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetLineAlpha(a)
@@ -1227,6 +1240,7 @@ function SimpleTweaksSwing.SetLineAlpha(a)
         SimpleTweaksDB.swingTimerLineA = ClampUnit(a, 1)
     end
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetLineThickness(thickness)
@@ -1241,6 +1255,7 @@ function SimpleTweaksSwing.SetLineThickness(thickness)
     end
     lastEdgeThick = nil
     RefreshText()
+    RefreshPreviewNow()
 end
 
 function SimpleTweaksSwing.SetFontSize(size)
@@ -1561,6 +1576,7 @@ local function DrawPreview(progress)
     p.fill:Show()
     p.ring:Show()
     p.pie:Show()
+    p.progress = progress
     local alpha = (0.5 + 0.5 * progress) * CircleAlpha()
     local r, g, b = CircleColor()
     local grow = PieFills()
@@ -1639,15 +1655,23 @@ local function DrawPreview(progress)
     end
 end
 
+function SimpleTweaksSwing.RefreshPreview()
+    if preview and preview.running then
+        DrawPreview(preview.progress or 0)
+    end
+end
+
 function SimpleTweaksSwing.SetPreview(parent, on)
     if not on or not parent then
         if preview then
+            preview.running = false
             preview.root:SetScript("OnUpdate", nil)
             preview.root:Hide()
         end
         return
     end
     local p = EnsurePreview(parent)
+    p.running = true
     p.root:ClearAllPoints()
     p.root:SetPoint("CENTER", parent, "CENTER", 0, 0)
     p.root:Show()
@@ -1659,8 +1683,7 @@ function SimpleTweaksSwing.SetPreview(parent, on)
             return
         end
         wait = 0
-        local progress = (GetTime() % 2.4) / 2.4
-        DrawPreview(progress)
+        DrawPreview((GetTime() % 2.4) / 2.4)
     end)
     DrawPreview((GetTime() % 2.4) / 2.4)
 end

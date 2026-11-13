@@ -310,6 +310,7 @@ local function CreateOptionsWindow()
 
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
+    window:Hide()
     window:SetSize(680, 380)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
@@ -787,29 +788,22 @@ local function CreateOptionsWindow()
     thickMore:SetScript("OnClick", function() StepThickness(1) end)
     PaintThickness()
 
+    local previewAnchor = CreateFrame("Frame", nil, window)
+    previewAnchor:SetSize(64, 64)
+    previewAnchor:SetPoint("TOPRIGHT", -40, -248)
+    previewAnchor:EnableMouse(false)
     local previewLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    previewLabel:SetPoint("TOPRIGHT", -78, -210)
+    previewLabel:SetPoint("BOTTOM", previewAnchor, "TOP", 0, 8)
     previewLabel:SetText("Vorschau")
     previewLabel:SetTextColor(0.9, 0.79, 0.61)
-    local previewWell = CreateFrame("Frame", nil, window, "BackdropTemplate")
-    previewWell:SetSize(156, 156)
-    previewWell:SetPoint("TOPRIGHT", -24, -232)
-    previewWell:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        tile = false,
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    previewWell:SetBackdropColor(0.09, 0.1, 0.09, 1)
-    previewWell:SetBackdropBorderColor(0.55, 0.36, 0.16, 0.85)
-    previewWell:EnableMouse(false)
 
-    window:SetScript("OnShow", function()
+    local function SyncSwingPreview()
         if SimpleTweaksSwing and SimpleTweaksSwing.SetPreview then
-            SimpleTweaksSwing.SetPreview(previewWell, true)
+            SimpleTweaksSwing.SetPreview(previewAnchor, window:IsShown())
         end
-    end)
+    end
+    window.SyncSwingPreview = SyncSwingPreview
+    window:SetScript("OnShow", SyncSwingPreview)
     window:SetScript("OnHide", function()
         if SimpleTweaksSwing and SimpleTweaksSwing.SetPreview then
             SimpleTweaksSwing.SetPreview(nil, false)
@@ -820,7 +814,11 @@ local function CreateOptionsWindow()
 end
 
 local function OpenOptions()
-    CreateOptionsWindow():Show()
+    local window = CreateOptionsWindow()
+    window:Show()
+    if window.SyncSwingPreview then
+        window.SyncSwingPreview()
+    end
 end
 
 local function HandleSlashCommand(message)
