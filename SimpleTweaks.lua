@@ -29,7 +29,6 @@ local DEFAULTS = {
     swingTimerBackB = 0.02,
     swingTimerBackA = 0.82,
 }
-local hookedButtons = setmetatable({}, { __mode = "k" })
 local optionsWindow
 local optionChecks = {}
 local SWING_CIRCLE_SIZES = { 9, 12, 16, 20, 24, 32, 40, 48 }
@@ -78,10 +77,6 @@ local function UpdateMacroName(button)
 end
 
 local function HookMacroName(button)
-    if button and button.Update and not hookedButtons[button] then
-        hooksecurefunc(button, "Update", UpdateMacroName)
-        hookedButtons[button] = true
-    end
     UpdateMacroName(button)
 end
 
@@ -102,17 +97,8 @@ local function RefreshMacroNames()
 end
 
 local function HookFutureMacroButtons()
-    local mixins = { ActionBarActionButtonMixin, ActionButtonMixin }
-    for _, mixin in ipairs(mixins) do
-        if type(mixin) == "table" and type(mixin.Update) == "function" and not mixin.simpleTweaksMacroHook then
-            hooksecurefunc(mixin, "Update", UpdateMacroName)
-            mixin.simpleTweaksMacroHook = true
-        end
-    end
+    RefreshMacroNames()
 end
-
-local stanceHooked = {}
-local stanceEditHooked = false
 
 local function ShouldHideStance()
     if not IsEnabled("hideStanceBar") then
@@ -124,30 +110,12 @@ local function ShouldHideStance()
     return true
 end
 
-local function HookStanceFrame(frame)
-    if not frame or stanceHooked[frame] or not frame.HookScript then
-        return
-    end
-    stanceHooked[frame] = true
-    frame:HookScript("OnShow", function(self)
-        if ShouldHideStance() then
-            self:Hide()
-        end
-    end)
-end
-
 local function UpdateStanceBar()
-    if EditModeManagerFrame and EditModeManagerFrame.HookScript and not stanceEditHooked then
-        stanceEditHooked = true
-        pcall(EditModeManagerFrame.HookScript, EditModeManagerFrame, "OnShow", UpdateStanceBar)
-        pcall(EditModeManagerFrame.HookScript, EditModeManagerFrame, "OnHide", UpdateStanceBar)
-    end
     local frames = { StanceBar, StanceBarFrame, ShapeshiftBarFrame }
     local hide = ShouldHideStance()
     for i = 1, #frames do
         local frame = frames[i]
         if frame then
-            HookStanceFrame(frame)
             if hide then
                 frame.stHiddenByTweaks = true
                 frame:Hide()
@@ -1003,9 +971,17 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     frame:UnregisterEvent("ADDON_LOADED")
 end)
 frame:SetScript("OnUpdate", function(_, elapsed)
-    if not IsEnabled("hunterRangeIndicator") then return end
     rangeUpdateElapsed = rangeUpdateElapsed + elapsed
-    if rangeUpdateElapsed < 0.2 then return end
-    rangeUpdateElapsed = 0
-    SetNameplateIndicatorEnabled(true)
+    if rangeUpdateElapsed >= 0.2 then
+        rangeUpdateElapsed = 0
+        if IsEnabled("hideStanceBar") then
+            UpdateStanceBar()
+        end
+        if IsEnabled("hideMacroNames") then
+            RefreshMacroNames()
+        end
+        if IsEnabled("hunterRangeIndicator") then
+            SetNameplateIndicatorEnabled(true)
+        end
+    end
 end)

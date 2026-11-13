@@ -40,7 +40,6 @@ local enabled = false
 local editing = false
 local dragging = false
 local layoutKey = "default"
-local editModeHooked = false
 local refreshElapsed = 0
 local watchElapsed = 0
 local GetTime = GetTime
@@ -180,7 +179,6 @@ local circleFill
 local pieHolder
 local pieStamp
 local sampleStart
-local editCallbacks = false
 
 local function AddCircleMask(owner, texture)
     if not texture or type(texture.AddMaskTexture) ~= "function" or type(owner.CreateMaskTexture) ~= "function" then
@@ -1096,22 +1094,33 @@ local function ExitEditMode()
     RefreshText()
 end
 
-local function HookEditMode()
-    if EditModeManagerFrame and EditModeManagerFrame.HookScript and not editModeHooked then
-        editModeHooked = true
-        EditModeManagerFrame:HookScript("OnShow", EnterEditMode)
-        EditModeManagerFrame:HookScript("OnHide", ExitEditMode)
-    end
-    if not editCallbacks and EventRegistry and EventRegistry.RegisterCallback then
-        editCallbacks = true
-        pcall(EventRegistry.RegisterCallback, EventRegistry, "EditMode.Enter", EnterEditMode, driver)
-        pcall(EventRegistry.RegisterCallback, EventRegistry, "EditMode.Exit", ExitEditMode, driver)
-    end
-    if EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown() then
+local function SyncEditMode()
+    local shown = EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
+    if shown and not editing then
         EnterEditMode()
-    elseif editing and EditModeManagerFrame and EditModeManagerFrame.IsShown and not EditModeManagerFrame:IsShown() then
+    elseif not shown and editing then
         ExitEditMode()
+    elseif shown and C_EditMode and C_EditMode.GetLayouts then
+        local ok, info = pcall(C_EditMode.GetLayouts)
+        if ok then
+            NoteLayouts(info)
+        end
     end
+end
+
+local editWatch = CreateFrame("Frame")
+local editWatchElapsed = 0
+editWatch:SetScript("OnUpdate", function(_, elapsed)
+    editWatchElapsed = editWatchElapsed + elapsed
+    if editWatchElapsed < 0.2 then
+        return
+    end
+    editWatchElapsed = 0
+    SyncEditMode()
+end)
+
+local function HookEditMode()
+    SyncEditMode()
 end
 
 function SimpleTweaksSwing.SetColor(r, g, b)
@@ -1318,12 +1327,6 @@ driver:SetScript("OnEvent", function(_, event, ...)
             ClearHand(hand)
         end
         RefreshText()
-    elseif event == "EDIT_MODE_LAYOUTS_UPDATED" then
-        local layoutInfo = ...
-        if type(layoutInfo) ~= "table" then
-            layoutInfo = select(2, ...)
-        end
-        NoteLayouts(layoutInfo)
     elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
         if C_EditMode and C_EditMode.GetLayouts then
             local ok, info = pcall(C_EditMode.GetLayouts)
@@ -1391,7 +1394,6 @@ pcall(driver.RegisterEvent, driver, "START_AUTOREPEAT_SPELL")
 pcall(driver.RegisterEvent, driver, "STOP_AUTOREPEAT_SPELL")
 pcall(driver.RegisterEvent, driver, "PLAYER_DEAD")
 pcall(driver.RegisterEvent, driver, "PLAYER_ENTERING_WORLD")
-pcall(driver.RegisterEvent, driver, "EDIT_MODE_LAYOUTS_UPDATED")
 pcall(driver.RegisterEvent, driver, "PLAYER_SPECIALIZATION_CHANGED")
 if driver.RegisterUnitEvent then
     pcall(driver.RegisterUnitEvent, driver, "UNIT_ATTACK_SPEED", "player")
