@@ -916,15 +916,16 @@ local function NextSwing(now)
             elseif remain < -OVERDUE_LIMIT then
                 swing.active = false
                 swing.expiry = nil
-            else
-                if remain < 0 then
-                    remain = 0
-                end
+            elseif remain > 0 then
                 if not bestRemain or remain < bestRemain then
                     bestRemain = remain
                     bestSpeed = swing.speed
                     bestExpiry = swing.expiry
                 end
+            elseif not bestRemain then
+                bestRemain = 0
+                bestSpeed = swing.speed
+                bestExpiry = swing.expiry
             end
         end
     end
@@ -934,11 +935,10 @@ end
 local REDRAW_INTERVAL = 1 / 30
 
 local function StartTicker()
-    if ticking then
-        return
+    if not ticking then
+        ticking = true
+        refreshElapsed = REDRAW_INTERVAL
     end
-    ticking = true
-    refreshElapsed = REDRAW_INTERVAL
     driver:SetScript("OnUpdate", OnSwingUpdate)
 end
 
@@ -1244,9 +1244,10 @@ function SimpleTweaksSwing.SetBackColor(r, g, b, a)
             SimpleTweaksDB.swingTimerBackA = ClampUnit(a, 0.82)
         end
     end
-    if circleFill then
-        circleFill:SetColorTexture(BackColor())
+    if circleFill and circleFill.SetVertexColor then
+        circleFill:SetVertexColor(BackColor())
     end
+    lastBackR, lastBackG, lastBackB, lastBackA = nil, nil, nil, nil
     RefreshText()
     RefreshPreviewNow()
 end
@@ -1337,6 +1338,9 @@ driver:SetScript("OnEvent", function(_, event, ...)
         end
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ADDON_LOADED" then
         HookEditMode()
+        if event == "PLAYER_ENTERING_WORLD" then
+            RefreshText()
+        end
     end
 end)
 

@@ -35,6 +35,7 @@ local optionChecks = {}
 local SWING_CIRCLE_SIZES = { 9, 12, 16, 20, 24, 32, 40, 48 }
 local nameplateIndicators = {}
 local activeNameplateUnits = {}
+local nameplateByUnit = {}
 local rangeUpdateElapsed = 0
 local meleeRangeItems = { 8149, 136605, 63427 }
 local currentTargetUnit
@@ -114,13 +115,22 @@ end
 local function UpdateStanceBar()
     local frames = { StanceBar, StanceBarFrame, ShapeshiftBarFrame }
     local hide = ShouldHideStance()
+    local locked = InCombatLockdown and InCombatLockdown()
     for i = 1, #frames do
         local frame = frames[i]
         if frame then
             if hide then
                 frame.stHiddenByTweaks = true
-                frame:Hide()
-            elseif frame.stHiddenByTweaks then
+                if not locked then
+                    if type(RegisterStateDriver) == "function" then
+                        pcall(RegisterStateDriver, frame, "visibility", "hide")
+                    end
+                    frame:Hide()
+                end
+            elseif frame.stHiddenByTweaks and not locked then
+                if type(UnregisterStateDriver) == "function" then
+                    pcall(UnregisterStateDriver, frame, "visibility")
+                end
                 frame.stHiddenByTweaks = nil
                 frame:Show()
                 if type(StanceBarFrame_Update) == "function" then
@@ -378,16 +388,23 @@ end
 
 local LEVEL_KEYS = { "LevelFrame", "PlayerLevelDiffFrame", "ClassificationFrame", "selectionHighlight" }
 
-local function HideWidget(widget)
-    if widget and widget.Hide and (not widget.IsShown or widget:IsShown()) then
-        widget:Hide()
+local function HideWidget(plate, widget)
+    if not widget or not widget.Hide or (widget.IsForbidden and widget:IsForbidden()) then
+        return
     end
-end
-
-local function ShowWidget(widget)
-    if widget and widget.Show then
-        widget:Show()
+    if widget.IsShown and not widget:IsShown() then
+        return
     end
+    if plate and not widget.stNpcHiddenByTweaks then
+        widget.stNpcHiddenByTweaks = true
+        local hidden = plate.stNpcHiddenWidgets
+        if not hidden then
+            hidden = {}
+            plate.stNpcHiddenWidgets = hidden
+        end
+        hidden[#hidden + 1] = widget
+    end
+    widget:Hide()
 end
 
 local function RememberLevelWidgets(plate, root)
@@ -414,16 +431,16 @@ local function HideFriendlyChrome(plate, unitFrame)
     if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
         return
     end
-    HideWidget(unitFrame.HealthBarsContainer)
-    HideWidget(unitFrame.CastBar)
-    HideWidget(unitFrame.name)
+    HideWidget(plate, unitFrame.HealthBarsContainer)
+    HideWidget(plate, unitFrame.CastBar)
+    HideWidget(plate, unitFrame.name)
     for i = 1, #LEVEL_KEYS do
-        HideWidget(unitFrame[LEVEL_KEYS[i]])
+        HideWidget(plate, unitFrame[LEVEL_KEYS[i]])
     end
     local list = plate.stLevelWidgets
     if list then
         for i = 1, #list do
-            HideWidget(list[i])
+            HideWidget(plate, list[i])
         end
     end
 end
@@ -437,25 +454,22 @@ local function RestoreNpcPlate(plate)
     if plate.stNpcName then
         plate.stNpcName:Hide()
     end
-    local unitFrame = plate.UnitFrame
-    if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
-        return
-    end
-    if unitFrame.SetShowOnlyName then
-        pcall(unitFrame.SetShowOnlyName, unitFrame, false)
-    end
-    ShowWidget(unitFrame.HealthBarsContainer)
-    ShowWidget(unitFrame.name)
-    ShowWidget(unitFrame.CastBar)
-    for i = 1, #LEVEL_KEYS do
-        ShowWidget(unitFrame[LEVEL_KEYS[i]])
-    end
-    local list = plate.stLevelWidgets
-    if list then
-        for i = 1, #list do
-            ShowWidget(list[i])
+    local hidden = plate.stNpcHiddenWidgets
+    plate.stNpcHiddenWidgets = nil
+    if hidden then
+        for i = 1, #hidden do
+            local widget = hidden[i]
+            widget.stNpcHiddenByTweaks = nil
+            if widget.Show and not (widget.IsForbidden and widget:IsForbidden()) then
+                widget:Show()
+            end
         end
     end
+    local unitFrame = plate.UnitFrame
+    if unitFrame and unitFrame.SetShowOnlyName and not (unitFrame.IsForbidden and unitFrame:IsForbidden()) and plate.stNpcHadShowOnlyName then
+        pcall(unitFrame.SetShowOnlyName, unitFrame, false)
+    end
+    plate.stNpcHadShowOnlyName = nil
 end
 
 local function PlayerNameStyle()
@@ -528,6 +542,7 @@ local function ApplyNpcNameOnly(unit)
     if not plate then
         return
     end
+    nameplateByUnit[unit] = plate
     if not IsEnabled("npcNameOnly") or not IsFriendlyNpc(unit) then
         if plate.stNpcHidden or plate.stNpcName then
             RestoreNpcPlate(plate)
@@ -542,7 +557,9 @@ local function ApplyNpcNameOnly(unit)
     RememberLevelWidgets(plate, unitFrame)
     RememberLevelWidgets(plate, plate)
     if not plate.stNpcOnlyApplied and unitFrame.SetShowOnlyName then
-        pcall(unitFrame.SetShowOnlyName, unitFrame, true)
+        if pcall(unitFrame.SetShowOnlyName, unitFrame, true) then
+            plate.stNpcHadShowOnlyName = true
+        end
         plate.stNpcOnlyApplied = true
     end
     HideFriendlyChrome(plate, unitFrame)
@@ -681,12 +698,18 @@ local function CreateOptionsWindow()
 
     local function OpenColor(getColor, applyColor)
         local r, g, b, a = getColor()
-        a = a or 1
+        if a == nil then
+            a = 1
+        end
         local function Apply(nr, ng, nb, na)
-            if nr then
-                applyColor(nr, ng, nb, na or a)
+            if nr ~= nil then
+                if na == nil then
+                    na = a
+                end
+                applyColor(nr, ng, nb, na)
             end
         end
+        local modernPicker = ColorPickerFrame and ColorPickerFrame.SetupColorPickerAndShow
         local function ReadAlpha()
             if ColorPickerFrame.GetColorAlpha then
                 local ok, picked = pcall(ColorPickerFrame.GetColorAlpha, ColorPickerFrame)
@@ -695,6 +718,9 @@ local function CreateOptionsWindow()
                 end
             end
             if type(ColorPickerFrame.opacity) == "number" then
+                if modernPicker then
+                    return ColorPickerFrame.opacity
+                end
                 return 1 - ColorPickerFrame.opacity
             end
             return a
@@ -724,7 +750,7 @@ local function CreateOptionsWindow()
                 opacityFunc = ReadAndApply,
                 cancelFunc = function(previous)
                     if type(previous) == "table" then
-                        Apply(previous.r or r, previous.g or g, previous.b or b, previous.a or a)
+                        Apply(previous.r ~= nil and previous.r or r, previous.g ~= nil and previous.g or g, previous.b ~= nil and previous.b or b, previous.a ~= nil and previous.a or a)
                     else
                         Apply(r, g, b, a)
                     end
@@ -743,8 +769,10 @@ local function CreateOptionsWindow()
         ColorPickerFrame.cancelFunc = function(previous)
             local previousR, previousG, previousB, previousA = r, g, b, a
             if type(previous) == "table" then
-                previousR, previousG, previousB = previous.r or r, previous.g or g, previous.b or b
-                previousA = previous.a or a
+                previousR = previous.r ~= nil and previous.r or r
+                previousG = previous.g ~= nil and previous.g or g
+                previousB = previous.b ~= nil and previous.b or b
+                previousA = previous.a ~= nil and previous.a or a
             end
             Apply(previousR, previousG, previousB, previousA)
         end
@@ -763,10 +791,16 @@ local function CreateOptionsWindow()
         fill:SetPoint("TOPLEFT", 2, -2)
         fill:SetPoint("BOTTOMRIGHT", -2, 2)
         local red, green, blue, alpha = getColor()
-        fill:SetColorTexture(red, green, blue, alpha or 1)
+        if alpha == nil then
+            alpha = 1
+        end
+        fill:SetColorTexture(red, green, blue, alpha)
         button:SetScript("OnClick", function()
             OpenColor(getColor, function(nr, ng, nb, na)
-                fill:SetColorTexture(nr, ng, nb, na or 1)
+                if na == nil then
+                    na = 1
+                end
+                fill:SetColorTexture(nr, ng, nb, na)
                 applyColor(nr, ng, nb, na)
             end)
         end)
@@ -1199,14 +1233,23 @@ pcall(frame.RegisterEvent, frame, "UPDATE_BONUS_ACTIONBAR")
 pcall(frame.RegisterEvent, frame, "ACTIONBAR_PAGE_CHANGED")
 pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORM")
 pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORMS")
+pcall(frame.RegisterEvent, frame, "PLAYER_REGEN_ENABLED")
 frame:SetScript("OnEvent", function(_, event, loadedAddon)
     if event == "NAME_PLATE_UNIT_ADDED" then
         activeNameplateUnits[loadedAddon] = true
+        local plate = NamePlateFor(loadedAddon)
+        if plate then
+            nameplateByUnit[loadedAddon] = plate
+        end
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
         if IsEnabled("npcNameOnly") then ApplyNpcNameOnly(loadedAddon) end
         return
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
-        local plate = NamePlateFor(loadedAddon)
+        local plate = nameplateByUnit[loadedAddon]
+        nameplateByUnit[loadedAddon] = nil
+        if not plate then
+            plate = NamePlateFor(loadedAddon)
+        end
         if plate then RestoreNpcPlate(plate) end
         activeNameplateUnits[loadedAddon] = nil
         local entry = nameplateIndicators[loadedAddon]
@@ -1217,6 +1260,9 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         return
     elseif event == "PLAYER_TARGET_CHANGED" then
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
+        return
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        UpdateStanceBar()
         return
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_SHAPESHIFT_FORMS" then
         HookFutureMacroButtons()
