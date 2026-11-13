@@ -385,43 +385,52 @@ local function IsFriendlyNpc(unit)
     return ok and type(reaction) == "number" and reaction >= 5
 end
 
-local LEVEL_KEYS = { "LevelFrame", "PlayerLevelDiffFrame", "ClassificationFrame", "selectionHighlight" }
+local LEVEL_KEYS = { "LevelFrame", "PlayerLevelDiffFrame" }
 
-local function HideWidget(plate, widget)
-    if not widget or not widget.Hide or (widget.IsForbidden and widget:IsForbidden()) then
+local function SuppressWidget(plate, widget)
+    if not widget or (widget.IsForbidden and widget:IsForbidden()) then
         return
     end
-    if widget.IsShown and not widget:IsShown() then
-        return
+    local state = plate.stNpcState
+    if not state then
+        state = {}
+        plate.stNpcState = state
     end
-    if plate and not widget.stNpcHiddenByTweaks then
-        widget.stNpcHiddenByTweaks = true
-        local hidden = plate.stNpcHiddenWidgets
-        if not hidden then
-            hidden = {}
-            plate.stNpcHiddenWidgets = hidden
+    local saved = state[widget]
+    if not saved then
+        saved = {}
+        if widget.GetAlpha then
+            local ok, alpha = pcall(widget.GetAlpha, widget)
+            if ok and type(alpha) == "number" then
+                saved.alpha = alpha
+            end
         end
-        hidden[#hidden + 1] = widget
+        if widget.IsShown then
+            local ok, shown = pcall(widget.IsShown, widget)
+            if ok then
+                saved.shown = shown and true or false
+            end
+        end
+        state[widget] = saved
     end
-    widget:Hide()
+    if widget.SetAlpha then
+        pcall(widget.SetAlpha, widget, 0)
+    end
+    if saved.shown ~= false and widget.Hide then
+        pcall(widget.Hide, widget)
+    end
 end
 
-local function RememberLevelWidgets(plate, root)
+local function SuppressLevelChildren(plate, root)
     if not root or not root.GetChildren or (root.IsForbidden and root:IsForbidden()) then
         return
-    end
-    local list = plate.stLevelWidgets
-    if not list then
-        list = {}
-        plate.stLevelWidgets = list
     end
     local children = { root:GetChildren() }
     for i = 1, #children do
         local child = children[i]
         local frameName = child.GetName and child:GetName()
-        if type(frameName) == "string" and frameName:find("Level") and not child.stNpcNoted then
-            child.stNpcNoted = true
-            list[#list + 1] = child
+        if type(frameName) == "string" and frameName:find("Level") then
+            SuppressWidget(plate, child)
         end
     end
 end
@@ -430,187 +439,28 @@ local function HideFriendlyChrome(plate, unitFrame)
     if not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
         return
     end
-    HideWidget(plate, unitFrame.HealthBarsContainer)
-    HideWidget(plate, unitFrame.CastBar)
+    SuppressWidget(plate, unitFrame.HealthBarsContainer)
+    SuppressWidget(plate, unitFrame.healthBar)
+    SuppressWidget(plate, unitFrame.HealthBar)
+    local container = unitFrame.HealthBarsContainer
+    if container and not (container.IsForbidden and container:IsForbidden()) then
+        SuppressWidget(plate, container.border)
+        SuppressWidget(plate, container.Border)
+        SuppressWidget(plate, container.background)
+        SuppressWidget(plate, container.Background)
+    end
+    local bar = unitFrame.healthBar or unitFrame.HealthBar
+    if bar and bar ~= unitFrame.HealthBarsContainer and not (bar.IsForbidden and bar:IsForbidden()) then
+        SuppressWidget(plate, bar.border)
+        SuppressWidget(plate, bar.Border)
+        SuppressWidget(plate, bar.background)
+        SuppressWidget(plate, bar.Background)
+    end
     for i = 1, #LEVEL_KEYS do
-        HideWidget(plate, unitFrame[LEVEL_KEYS[i]])
+        SuppressWidget(plate, unitFrame[LEVEL_KEYS[i]])
     end
-    local list = plate.stLevelWidgets
-    if list then
-        for i = 1, #list do
-            HideWidget(plate, list[i])
-        end
-    end
-end
-
-local npcNameHolder
-local npcParkPlates = {}
-local nameUpdateHooked = false
-
-local function NameHolder()
-    if not npcNameHolder then
-        npcNameHolder = CreateFrame("Frame")
-        npcNameHolder:Hide()
-    end
-    return npcNameHolder
-end
-
-local function ParkOne(plate, fontString)
-    if not fontString or fontString == plate.stNpcName or not fontString.SetParent then
-        return
-    end
-    if fontString.IsForbidden and fontString:IsForbidden() then
-        return
-    end
-    if fontString.GetObjectType and fontString:GetObjectType() ~= "FontString" then
-        return
-    end
-    local holder = NameHolder()
-    if not fontString.stNpcOrigin then
-        local parent
-        local okParent, value = pcall(fontString.GetParent, fontString)
-        if okParent and value ~= holder then
-            parent = value
-        elseif plate.UnitFrame then
-            parent = plate.UnitFrame
-        end
-        local alpha
-        if fontString.GetAlpha then
-            local okAlpha, amount = pcall(fontString.GetAlpha, fontString)
-            if okAlpha and type(amount) == "number" then
-                alpha = amount
-            end
-        end
-        fontString.stNpcOrigin = { parent = parent, alpha = alpha }
-    end
-    local okParent, parent = pcall(fontString.GetParent, fontString)
-    if not okParent or parent ~= holder then
-        pcall(fontString.SetParent, fontString, holder)
-    end
-    local alphaOk, alpha = false, nil
-    if fontString.GetAlpha then
-        alphaOk, alpha = pcall(fontString.GetAlpha, fontString)
-    end
-    if not alphaOk or alpha ~= 0 then
-        pcall(fontString.SetAlpha, fontString, 0)
-    end
-    local parked = plate.stNpcParked
-    if not parked then
-        parked = {}
-        plate.stNpcParked = parked
-    end
-    parked[fontString] = fontString.stNpcOrigin
-end
-
-local function SameText(left, right)
-    if left == nil or right == nil then
-        return false
-    end
-    local ok, match = pcall(function()
-        return left == right
-    end)
-    return ok and match == true
-end
-
-local function ParkRegions(plate, root, unitName)
-    if not root or not root.GetRegions or (root.IsForbidden and root:IsForbidden()) then
-        return
-    end
-    local regions = { root:GetRegions() }
-    for i = 1, #regions do
-        local region = regions[i]
-        if region and region.GetObjectType and region:GetObjectType() == "FontString" and region ~= plate.stNpcName then
-            local text
-            if region.GetText then
-                local ok, value = pcall(region.GetText, region)
-                if ok then
-                    text = value
-                end
-            end
-            if SameText(text, unitName) then
-                ParkOne(plate, region)
-            end
-        end
-    end
-end
-
-local function ParkContainer(plate, root)
-    if not root or (root.IsForbidden and root:IsForbidden()) then
-        return
-    end
-    if root.GetObjectType and root:GetObjectType() == "FontString" then
-        ParkOne(plate, root)
-        return
-    end
-    if not root.GetRegions then
-        return
-    end
-    local regions = { root:GetRegions() }
-    for i = 1, #regions do
-        local region = regions[i]
-        if region and region.GetObjectType and region:GetObjectType() == "FontString" then
-            ParkOne(plate, region)
-        end
-    end
-end
-
-local function ParkUnitName(plate, unitFrame)
-    if not plate or not unitFrame or (unitFrame.IsForbidden and unitFrame:IsForbidden()) then
-        return
-    end
-    npcParkPlates[unitFrame] = plate
-    ParkOne(plate, unitFrame.name)
-    ParkContainer(plate, unitFrame.Name)
-    local unitName
-    local unit = unitFrame.unit or unitFrame.displayedUnit
-    if unit then
-        local ok, value = pcall(UnitName, unit)
-        if ok then
-            unitName = value
-        end
-    end
-    ParkRegions(plate, unitFrame, unitName)
-    ParkContainer(plate, unitFrame.NameContainer)
-    ParkContainer(plate, unitFrame.nameContainer)
-end
-
-local function HookNameUpdate()
-    if nameUpdateHooked or type(hooksecurefunc) ~= "function" or type(CompactUnitFrame_UpdateName) ~= "function" then
-        return
-    end
-    nameUpdateHooked = true
-    hooksecurefunc("CompactUnitFrame_UpdateName", function(unitFrame)
-        local plate = unitFrame and npcParkPlates[unitFrame]
-        if not plate or not plate.stNpcHidden then
-            return
-        end
-        ParkUnitName(plate, unitFrame)
-    end)
-end
-
-local function UnparkUnitName(plate)
-    if not plate then
-        return
-    end
-    if plate.UnitFrame then
-        npcParkPlates[plate.UnitFrame] = nil
-    end
-    local parked = plate.stNpcParked
-    plate.stNpcParked = nil
-    if not parked then
-        return
-    end
-    for fontString, origin in pairs(parked) do
-        fontString.stNpcOrigin = nil
-        if origin and not (fontString.IsForbidden and fontString:IsForbidden()) then
-            if origin.parent and fontString.SetParent then
-                pcall(fontString.SetParent, fontString, origin.parent)
-            end
-            if origin.alpha ~= nil and fontString.SetAlpha then
-                pcall(fontString.SetAlpha, fontString, origin.alpha)
-            end
-        end
-    end
+    SuppressLevelChildren(plate, unitFrame)
+    SuppressLevelChildren(plate, plate)
 end
 
 local function RestoreNpcPlate(plate)
@@ -618,123 +468,20 @@ local function RestoreNpcPlate(plate)
         return
     end
     plate.stNpcHidden = nil
-    plate.stNpcOnlyApplied = nil
-    if plate.stNpcName then
-        plate.stNpcName:Hide()
+    local state = plate.stNpcState
+    plate.stNpcState = nil
+    if not state then
+        return
     end
-    UnparkUnitName(plate)
-    local hidden = plate.stNpcHiddenWidgets
-    plate.stNpcHiddenWidgets = nil
-    if hidden then
-        for i = 1, #hidden do
-            local widget = hidden[i]
-            widget.stNpcHiddenByTweaks = nil
-            if widget.Show and not (widget.IsForbidden and widget:IsForbidden()) then
-                widget:Show()
+    for widget, saved in pairs(state) do
+        if saved and not (widget.IsForbidden and widget:IsForbidden()) then
+            if saved.alpha ~= nil and widget.SetAlpha then
+                pcall(widget.SetAlpha, widget, saved.alpha)
+            end
+            if saved.shown == true and widget.Show then
+                pcall(widget.Show, widget)
             end
         end
-    end
-    local unitFrame = plate.UnitFrame
-    if unitFrame and unitFrame.SetShowOnlyName and not (unitFrame.IsForbidden and unitFrame:IsForbidden()) and plate.stNpcHadShowOnlyName then
-        pcall(unitFrame.SetShowOnlyName, unitFrame, false)
-    end
-    plate.stNpcHadShowOnlyName = nil
-end
-
-local function IsFriendlyPlayer(unit)
-    local isPlayer
-    local ok = pcall(function()
-        isPlayer = PlainBoolean(UnitIsPlayer(unit))
-    end)
-    if not ok or isPlayer ~= true then
-        return false
-    end
-    if type(UnitIsFriend) == "function" then
-        local friend
-        ok = pcall(function()
-            friend = PlainBoolean(UnitIsFriend("player", unit))
-        end)
-        return ok and friend == true
-    end
-    if type(UnitCanAttack) == "function" then
-        local hostile
-        ok = pcall(function()
-            hostile = PlainBoolean(UnitCanAttack("player", unit))
-        end)
-        return ok and hostile == false
-    end
-    return false
-end
-
-local function IsSelectedUnit(unit)
-    if type(UnitIsUnit) ~= "function" then
-        return false
-    end
-    local function Matches(other)
-        local selected
-        local ok = pcall(function()
-            selected = PlainBoolean(UnitIsUnit(unit, other))
-        end)
-        if not ok or selected == nil then
-            return true
-        end
-        return selected == true
-    end
-    return Matches("target") or Matches("mouseover")
-end
-
-local function FontFromPlate(plate)
-    local unitFrame = plate and plate.UnitFrame
-    local fontString = unitFrame and unitFrame.name
-    if not fontString or (fontString.IsForbidden and fontString:IsForbidden()) then
-        return nil
-    end
-    if fontString.GetFontObject then
-        local ok, fontObject = pcall(fontString.GetFontObject, fontString)
-        if ok and fontObject then
-            return fontObject
-        end
-    end
-    if fontString.GetFont then
-        local ok, font, size, flags = pcall(fontString.GetFont, fontString)
-        if ok and type(font) == "string" and type(size) == "number" and size > 0 then
-            return nil, font, size, flags
-        end
-    end
-    return nil
-end
-
-local function PlayerNameStyle()
-    for unit in pairs(activeNameplateUnits) do
-        if IsFriendlyPlayer(unit) and not IsSelectedUnit(unit) then
-            local fontObject, font, size, flags = FontFromPlate(NamePlateFor(unit))
-            if fontObject or font then
-                return fontObject, font, size, flags
-            end
-        end
-    end
-    return nil
-end
-
-local function ApplyNpcFont(name)
-    local fontObject, font, size, flags = PlayerNameStyle()
-    if not fontObject and not font then
-        fontObject = SystemFont_NamePlateFixed or SystemFont_NamePlate
-    end
-    if name.SetIgnoreParentScale and not name.stIgnoreScale then
-        name:SetIgnoreParentScale(true)
-        name.stIgnoreScale = true
-    end
-    if fontObject and name.SetFontObject and name.stFontObject ~= fontObject then
-        pcall(name.SetFontObject, name, fontObject)
-        name.stFontObject = fontObject
-        name.stFont = nil
-        name.stSize = nil
-    elseif type(font) == "string" and type(size) == "number" and size > 0 and (name.stFont ~= font or name.stSize ~= size) then
-        pcall(name.SetFont, name, font, size, flags)
-        name.stFont = font
-        name.stSize = size
-        name.stFontObject = nil
     end
 end
 
@@ -745,7 +492,7 @@ local function ApplyNpcNameOnly(unit)
     end
     nameplateByUnit[unit] = plate
     if not IsEnabled("npcNameOnly") or not IsFriendlyNpc(unit) then
-        if plate.stNpcHidden or plate.stNpcName then
+        if plate.stNpcHidden or plate.stNpcState then
             RestoreNpcPlate(plate)
         end
         return
@@ -755,39 +502,9 @@ local function ApplyNpcNameOnly(unit)
         return
     end
     plate.stNpcHidden = true
-    RememberLevelWidgets(plate, unitFrame)
-    RememberLevelWidgets(plate, plate)
-    if not plate.stNpcOnlyApplied and unitFrame.SetShowOnlyName then
-        if pcall(unitFrame.SetShowOnlyName, unitFrame, true) then
-            plate.stNpcHadShowOnlyName = true
-        end
-        plate.stNpcOnlyApplied = true
-    end
     HideFriendlyChrome(plate, unitFrame)
-    HookNameUpdate()
-    ParkUnitName(plate, unitFrame)
-    local name = plate.stNpcName
-    if not name then
-        local template = (SystemFont_NamePlateFixed and "SystemFont_NamePlateFixed") or (SystemFont_NamePlate and "SystemFont_NamePlate")
-        name = plate:CreateFontString(nil, "OVERLAY", template)
-        name:SetPoint("CENTER", plate, "CENTER", 0, 10)
-        plate.stNpcName = name
-    end
-    ApplyNpcFont(name)
-    local okName, unitName = pcall(UnitName, unit)
-    if not okName then
-        name:Hide()
-        return
-    end
-    local wrote = pcall(function()
-        name:SetText(unitName)
-        name:SetTextColor(1, 1, 1)
-        name:Show()
-    end)
-    if not wrote then
-        name:Hide()
-    end
 end
+
 
 local function RefreshNpcNameOnly()
     for unit in pairs(activeNameplateUnits) do
