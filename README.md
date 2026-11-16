@@ -7,7 +7,7 @@ Ein kleines Addon für World of Warcraft: Forever mit einem bronzefarbenen Einst
 - Die Haltungsanzeige ausblenden.
 - Bei freundlichen NSCs Lebensbalken und Stufenanzeige ausblenden. Der Name bleibt der von Blizzard. Spieler, Feinde und neutrale Einheiten bleiben unverändert.
 - Einen Reichweitenpunkt am aktuellen Ziel für Jäger anzeigen.
-- Einen dauerhaften FPS-Zähler unten rechts anzeigen, den normalen von Blizzard.
+- Einen dauerhaften FPS-Zähler unten rechts anzeigen, den normalen von Blizzard. Im deutschen Client steht dort FPS statt BPS.
 - Einen Schwungtimer als Kreis.
 
 Die Karten- und Makro-Funktionen sind standardmäßig aktiv. Haltungsanzeige, NSC-Namen, FPS-Anzeige, Reichweitenindikator und Schwungtimer sind standardmäßig ausgeschaltet. Einstellungen werden gespeichert.

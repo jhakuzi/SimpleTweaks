@@ -143,6 +143,41 @@ local function UpdateStanceBar()
     end
 end
 
+local originalFpsLabel
+
+local function FpsLabelWidget()
+    if FramerateLabel then
+        return FramerateLabel
+    end
+    if FramerateFrame and FramerateFrame.Label then
+        return FramerateFrame.Label
+    end
+end
+
+local function ShowFpsWord()
+    local label = FpsLabelWidget()
+    if not label or not label.SetText then
+        return
+    end
+    if originalFpsLabel == nil and label.GetText then
+        local ok, text = pcall(label.GetText, label)
+        if ok and type(text) == "string" then
+            originalFpsLabel = text
+        end
+    end
+    local ok, text = pcall(label.GetText, label)
+    if not ok or text ~= "FPS:" then
+        pcall(label.SetText, label, "FPS:")
+    end
+end
+
+local function RestoreFpsWord()
+    local label = FpsLabelWidget()
+    if label and originalFpsLabel and label.SetText then
+        pcall(label.SetText, label, originalFpsLabel)
+    end
+end
+
 local function UpdateFpsCounter()
     local frame = FramerateFrame or FramerateLabel
     if not (SimpleTweaksDB and SimpleTweaksDB.showFps) then
@@ -153,6 +188,7 @@ local function UpdateFpsCounter()
             elseif frame.Hide then
                 frame:Hide()
             end
+            RestoreFpsWord()
         end
         return
     end
@@ -176,6 +212,7 @@ local function UpdateFpsCounter()
         frame:ClearAllPoints()
         frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -8, 8)
     end
+    ShowFpsWord()
 end
 
 local function SetIndicatorColor(entry, color)
