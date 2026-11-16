@@ -7,9 +7,10 @@ Ein kleines Addon für World of Warcraft: Forever mit einem bronzefarbenen Einst
 - Die Haltungsanzeige ausblenden.
 - Bei freundlichen NSCs Lebensbalken und Stufenanzeige ausblenden. Der Name bleibt der von Blizzard. Spieler, Feinde und neutrale Einheiten bleiben unverändert.
 - Einen Reichweitenpunkt am aktuellen Ziel für Jäger anzeigen.
+- Einen dauerhaften FPS-Zähler unten rechts anzeigen, den normalen von Blizzard.
 - Einen Schwungtimer als Kreis.
 
-Die Karten- und Makro-Funktionen sind standardmäßig aktiv. Haltungsanzeige, NSC-Namen, Reichweitenindikator und Schwungtimer sind standardmäßig ausgeschaltet. Einstellungen werden gespeichert.
+Die Karten- und Makro-Funktionen sind standardmäßig aktiv. Haltungsanzeige, NSC-Namen, FPS-Anzeige, Reichweitenindikator und Schwungtimer sind standardmäßig ausgeschaltet. Einstellungen werden gespeichert.
 
 ## Install
 
@@ -25,6 +26,7 @@ Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 - `/tweaks makros an|aus` schaltet das Ausblenden der Makronamen um.
 - `/tweaks haltung an|aus` schaltet das Ausblenden der Haltungsanzeige um.
 - `/tweaks nsc an|aus` blendet bei freundlichen NSCs Lebensbalken und Stufenanzeige aus.
+- `/tweaks fps an|aus` schaltet die FPS-Anzeige unten rechts um. Die Einstellung bleibt nach `/reload` und erneutem Einloggen erhalten.
 - `/tweaks schwung an|aus` schaltet den Schwungtimer um.
 - Das Einstellungsfenster übernimmt Änderungen sofort und ist auf Deutsch. Neben den Schwungtimer-Einstellungen steht **Vorschau** in einem kleinen, etwas helleren Kasten im Hauptfenster.
 - **Schwungtimer** zeigt einen Kreis bis zum nächsten eigenen Nahkampfschlag oder Fernkampfangriff. Eine Linie auf dem Radius dreht sich um die Mitte: **Abnehmend** leert den Kreis, **Zunehmend** füllt ihn. Die Füllung läuft dabei von halber Deckkraft bis ganz deckend; diese Deckkraft wird mit der eigenen Füllfarbe multipliziert. Füllfarbe, Rand und Hintergrund haben je eine Farbe mit eigener Deckkraft. **Rahmen** stellt die Randdicke ein, **Linie** die Deckkraft der Radiuslinie und **Dicke** ihre Strichstärke. **Funke** ist ein eigener Glanzpunkt am Ende dieser Linie und ändert die Linie nicht. Die Standardgröße entspricht dem Reichweitenpunkt. Ohne laufenden Angriff bleibt die Anzeige verborgen. Im Bearbeitungsmodus (Esc) lässt sich der Kreis verschieben; sein Mittelpunkt ist der Anker und bleibt beim Schließen an derselben Stelle. Die Position wird pro Layout gespeichert.

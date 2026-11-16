@@ -5,6 +5,7 @@ local DEFAULTS = {
     hunterRangeIndicator = false,
     hideStanceBar = false,
     npcNameOnly = false,
+    showFps = false,
     swingTimer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,
@@ -139,6 +140,41 @@ local function UpdateStanceBar()
                 end
             end
         end
+    end
+end
+
+local function UpdateFpsCounter()
+    local frame = FramerateFrame or FramerateLabel
+    if not (SimpleTweaksDB and SimpleTweaksDB.showFps) then
+        if frame and frame.stTweaksFps and frame.IsShown and frame:IsShown() then
+            frame.stTweaksFps = nil
+            if type(ToggleFramerate) == "function" then
+                pcall(ToggleFramerate)
+            elseif frame.Hide then
+                frame:Hide()
+            end
+        end
+        return
+    end
+    if not frame and type(ToggleFramerate) == "function" then
+        pcall(ToggleFramerate)
+        frame = FramerateFrame or FramerateLabel
+    end
+    if not frame then
+        return
+    end
+    if frame.IsShown and not frame:IsShown() then
+        if type(ToggleFramerate) == "function" then
+            pcall(ToggleFramerate)
+        elseif frame.Show then
+            frame:Show()
+        end
+    end
+    frame.stTweaksFps = true
+    local point, relativeTo, relativePoint = frame:GetPoint(1)
+    if point ~= "BOTTOMRIGHT" or relativeTo ~= UIParent or relativePoint ~= "BOTTOMRIGHT" then
+        frame:ClearAllPoints()
+        frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -8, 8)
     end
 end
 
@@ -523,6 +559,8 @@ local function SetOption(setting, enabled)
         UpdateStanceBar()
     elseif setting == "npcNameOnly" then
         RefreshNpcNameOnly()
+    elseif setting == "showFps" then
+        UpdateFpsCounter()
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
@@ -533,6 +571,7 @@ local function SetOption(setting, enabled)
         hideMacroNames = enabled and "Makronamen ausgeblendet." or "Makronamen wiederhergestellt.",
         hideStanceBar = enabled and "Haltungsanzeige ausgeblendet." or "Haltungsanzeige wiederhergestellt.",
         npcNameOnly = enabled and "Freundliche NSCs zeigen nur den Namen." or "NSC-Namensplaketten wiederhergestellt.",
+        showFps = enabled and "FPS-Anzeige aktiviert." or "FPS-Anzeige ausgeblendet.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
     }
@@ -546,7 +585,7 @@ local function CreateOptionsWindow()
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
     window:Hide()
-    window:SetSize(680, 468)
+    window:SetSize(680, 512)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -582,7 +621,8 @@ local function CreateOptionsWindow()
     AddOption("hunterRangeIndicator", "Jäger Reichweitenindikator", -156)
     AddOption("hideStanceBar", "Haltungsanzeige ausblenden", -200)
     AddOption("npcNameOnly", "Bei freundlichen NSCs nur Namen anzeigen", -244)
-    AddOption("swingTimer", "Schwungtimer", -288)
+    AddOption("showFps", "FPS-Anzeige unten rechts", -288)
+    AddOption("swingTimer", "Schwungtimer", -332)
 
     local function MakeFontStep(labelText)
         local button = CreateFrame("Button", nil, window)
@@ -768,7 +808,7 @@ local function CreateOptionsWindow()
     end
 
     local groesseLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    groesseLabel:SetPoint("TOPLEFT", 52, -328)
+    groesseLabel:SetPoint("TOPLEFT", 52, -372)
     groesseLabel:SetText("Größe")
     groesseLabel:SetTextColor(0.75, 0.66, 0.5)
     local circleSmaller = MakeFontStep("-")
@@ -911,7 +951,7 @@ local function CreateOptionsWindow()
 
     local drainMode = MakeChoice("Abnehmend", 96)
     local fillMode = MakeChoice("Zunehmend", 96)
-    drainMode:SetPoint("TOPLEFT", 52, -364)
+    drainMode:SetPoint("TOPLEFT", 52, -408)
     fillMode:SetPoint("LEFT", drainMode, "RIGHT", 4, 0)
 
     local function CurrentPie()
@@ -954,7 +994,7 @@ local function CreateOptionsWindow()
     end)
 
     local lineLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    lineLabel:SetPoint("TOPLEFT", 52, -400)
+    lineLabel:SetPoint("TOPLEFT", 52, -444)
     lineLabel:SetText("Linie")
     lineLabel:SetTextColor(0.75, 0.66, 0.5)
     local lineLess = MakeFontStep("-")
@@ -1044,7 +1084,7 @@ local function CreateOptionsWindow()
 
     local previewBox = CreateFrame("Frame", nil, window, "BackdropTemplate")
     previewBox:SetSize(96, 96)
-    previewBox:SetPoint("TOPRIGHT", -36, -336)
+    previewBox:SetPoint("TOPRIGHT", -36, -380)
     previewBox:EnableMouse(false)
     previewBox:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -1128,6 +1168,14 @@ local function HandleSlashCommand(message)
         else
             Print("Freundliche NSCs nur als Name: " .. (IsEnabled("npcNameOnly") and "an" or "aus") .. ". /tweaks nsc an|aus")
         end
+    elseif feature == "fps" then
+        if value == "on" or value == "an" then
+            SetOption("showFps", true)
+        elseif value == "off" or value == "aus" then
+            SetOption("showFps", false)
+        else
+            Print("FPS-Anzeige: " .. (IsEnabled("showFps") and "an" or "aus") .. ". /tweaks fps an|aus")
+        end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
             if value == "an" or value == "aus" then SetOption("disableMapFade", value == "an") else Print("Verwendung: /tweaks karte an|aus") end
@@ -1188,6 +1236,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         HookFutureMacroButtons()
         RefreshMacroNames()
         UpdateStanceBar()
+        UpdateFpsCounter()
         if IsEnabled("npcNameOnly") then
             RefreshNpcNameOnly()
         end
@@ -1215,6 +1264,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
     RefreshMacroNames()
     HookFutureMacroButtons()
     UpdateStanceBar()
+    UpdateFpsCounter()
     if SimpleTweaksSwing and SimpleTweaksSwing.Init then
         SimpleTweaksSwing.Init()
     end
@@ -1239,6 +1289,9 @@ frame:SetScript("OnUpdate", function(_, elapsed)
         end
         if IsEnabled("npcNameOnly") then
             RefreshNpcNameOnly()
+        end
+        if SimpleTweaksDB and SimpleTweaksDB.showFps then
+            UpdateFpsCounter()
         end
     end
 end)
