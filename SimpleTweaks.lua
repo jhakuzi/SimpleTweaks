@@ -6,6 +6,7 @@ local DEFAULTS = {
     hideStanceBar = false,
     npcNameOnly = false,
     showFps = false,
+    comboPoints = false,
     swingTimer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,
@@ -585,6 +586,189 @@ local function RefreshNpcNameOnly()
     end
 end
 
+local COMBO_BORDER = 9
+local COMBO_DOT = 7
+local COMBO_GAP = 2
+local COMBO_MAX = 10
+
+local function PlainNumber(value)
+    if type(value) ~= "number" then
+        return nil
+    end
+    if issecretvalue and issecretvalue(value) then
+        return nil
+    end
+    return value
+end
+
+local function IsEnemyUnit(unit)
+    if type(UnitCanAttack) ~= "function" then
+        return false
+    end
+    local attack
+    local ok = pcall(function()
+        attack = PlainBoolean(UnitCanAttack("player", unit))
+    end)
+    return ok and attack == true
+end
+
+local function ComboPointsOn(unit)
+    local points
+    if type(GetComboPoints) == "function" then
+        local ok, value = pcall(GetComboPoints, "player", unit)
+        if ok then
+            points = PlainNumber(value)
+        end
+        if points == nil then
+            ok, value = pcall(GetComboPoints, unit)
+            if ok then
+                points = PlainNumber(value)
+            end
+        end
+    end
+    if points == nil and type(UnitIsUnit) == "function" and type(UnitPower) == "function" then
+        local isTarget
+        local ok = pcall(function()
+            isTarget = PlainBoolean(UnitIsUnit(unit, "target"))
+        end)
+        if ok and isTarget then
+            local powerType = Enum and Enum.PowerType and Enum.PowerType.ComboPoints or 4
+            local amount
+            ok = pcall(function()
+                amount = UnitPower("player", powerType)
+            end)
+            if ok then
+                points = PlainNumber(amount)
+            end
+        end
+    end
+    if not points or points < 1 then
+        return 0
+    end
+    if points > COMBO_MAX then
+        return COMBO_MAX
+    end
+    return points
+end
+
+local function HideCombo(plate)
+    local holder = plate and plate.stCombo
+    if not holder then
+        return
+    end
+    holder.lastPoints = 0
+    holder:Hide()
+end
+
+local function EnsureCombo(plate)
+    local holder = plate.stCombo
+    if holder then
+        return holder
+    end
+    holder = CreateFrame("Frame", nil, plate)
+    holder:SetSize((COMBO_BORDER + COMBO_GAP) * COMBO_MAX, COMBO_BORDER)
+    holder.dots = {}
+    holder.borders = {}
+    for i = 1, COMBO_MAX do
+        local border = holder:CreateTexture(nil, "OVERLAY", nil, 1)
+        border:SetTexture("Interface\\Buttons\\WHITE8X8")
+        border:SetColorTexture(0, 0, 0, 1)
+        border:SetSize(COMBO_BORDER, COMBO_BORDER)
+        border:Hide()
+        local dot = holder:CreateTexture(nil, "OVERLAY", nil, 2)
+        dot:SetTexture("Interface\\Buttons\\WHITE8X8")
+        dot:SetColorTexture(1, 0, 0, 1)
+        dot:SetSize(COMBO_DOT, COMBO_DOT)
+        dot:Hide()
+        if holder.CreateMaskTexture then
+            local borderMask = holder:CreateMaskTexture()
+            borderMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            borderMask:SetAllPoints(border)
+            border:AddMaskTexture(borderMask)
+            local dotMask = holder:CreateMaskTexture()
+            dotMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            dotMask:SetAllPoints(dot)
+            dot:AddMaskTexture(dotMask)
+        end
+        holder.borders[i] = border
+        holder.dots[i] = dot
+    end
+    plate.stCombo = holder
+    return holder
+end
+
+local function AnchorCombo(plate, holder)
+    local unitFrame = plate.UnitFrame
+    if unitFrame and unitFrame.IsForbidden and unitFrame:IsForbidden() then
+        unitFrame = nil
+    end
+    local anchor = unitFrame or plate
+    if holder.anchor == anchor then
+        return
+    end
+    holder:ClearAllPoints()
+    local placed = pcall(holder.SetPoint, holder, "TOP", anchor, "BOTTOM", 0, -2)
+    if not placed and anchor ~= plate then
+        pcall(holder.SetPoint, holder, "TOP", plate, "BOTTOM", 0, -2)
+        anchor = plate
+    end
+    holder.anchor = anchor
+    holder.lastPoints = nil
+end
+
+local function ShowComboCount(holder, points)
+    if holder.lastPoints == points then
+        holder:Show()
+        return
+    end
+    local step = COMBO_BORDER + COMBO_GAP
+    local total = points * COMBO_BORDER + (points - 1) * COMBO_GAP
+    local origin = -total / 2 + COMBO_BORDER / 2
+    for i = 1, COMBO_MAX do
+        local border = holder.borders[i]
+        local dot = holder.dots[i]
+        if i <= points then
+            local x = origin + (i - 1) * step
+            border:ClearAllPoints()
+            border:SetPoint("CENTER", holder, "CENTER", x, 0)
+            dot:ClearAllPoints()
+            dot:SetPoint("CENTER", border, "CENTER", 0, 0)
+            border:Show()
+            dot:Show()
+        else
+            border:Hide()
+            dot:Hide()
+        end
+    end
+    holder.lastPoints = points
+    holder:Show()
+end
+
+local function UpdateComboPlate(unit)
+    local plate = nameplateByUnit[unit] or NamePlateFor(unit)
+    if not plate then
+        return
+    end
+    if not (SimpleTweaksDB and SimpleTweaksDB.comboPoints) or not IsEnemyUnit(unit) then
+        HideCombo(plate)
+        return
+    end
+    local points = ComboPointsOn(unit)
+    if points < 1 then
+        HideCombo(plate)
+        return
+    end
+    local holder = EnsureCombo(plate)
+    AnchorCombo(plate, holder)
+    ShowComboCount(holder, points)
+end
+
+local function RefreshComboPoints()
+    for unit in pairs(activeNameplateUnits) do
+        pcall(UpdateComboPlate, unit)
+    end
+end
+
 local function SetOption(setting, enabled)
     SimpleTweaksDB[setting] = enabled
 
@@ -598,6 +782,8 @@ local function SetOption(setting, enabled)
         RefreshNpcNameOnly()
     elseif setting == "showFps" then
         UpdateFpsCounter()
+    elseif setting == "comboPoints" then
+        RefreshComboPoints()
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
@@ -609,6 +795,7 @@ local function SetOption(setting, enabled)
         hideStanceBar = enabled and "Haltungsanzeige ausgeblendet." or "Haltungsanzeige wiederhergestellt.",
         npcNameOnly = enabled and "Freundliche NSCs zeigen nur den Namen." or "NSC-Namensplaketten wiederhergestellt.",
         showFps = enabled and "FPS-Anzeige aktiviert." or "FPS-Anzeige ausgeblendet.",
+        comboPoints = enabled and "Combo-Punkte aktiviert." or "Combo-Punkte ausgeblendet.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
     }
@@ -622,7 +809,7 @@ local function CreateOptionsWindow()
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
     window:Hide()
-    window:SetSize(680, 512)
+    window:SetSize(680, 568)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -659,7 +846,8 @@ local function CreateOptionsWindow()
     AddOption("hideStanceBar", "Haltungsanzeige ausblenden", -200)
     AddOption("npcNameOnly", "Bei freundlichen NSCs nur Namen anzeigen", -244)
     AddOption("showFps", "FPS-Anzeige unten rechts", -288)
-    AddOption("swingTimer", "Schwungtimer", -332)
+    AddOption("comboPoints", "Combo-Punkte unter feindlichen Namensplaketten", -332)
+    AddOption("swingTimer", "Schwungtimer", -376)
 
     local function MakeFontStep(labelText)
         local button = CreateFrame("Button", nil, window)
@@ -845,7 +1033,7 @@ local function CreateOptionsWindow()
     end
 
     local groesseLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    groesseLabel:SetPoint("TOPLEFT", 52, -372)
+    groesseLabel:SetPoint("TOPLEFT", 52, -416)
     groesseLabel:SetText("Größe")
     groesseLabel:SetTextColor(0.75, 0.66, 0.5)
     local circleSmaller = MakeFontStep("-")
@@ -988,7 +1176,7 @@ local function CreateOptionsWindow()
 
     local drainMode = MakeChoice("Abnehmend", 96)
     local fillMode = MakeChoice("Zunehmend", 96)
-    drainMode:SetPoint("TOPLEFT", 52, -408)
+    drainMode:SetPoint("TOPLEFT", 52, -452)
     fillMode:SetPoint("LEFT", drainMode, "RIGHT", 4, 0)
 
     local function CurrentPie()
@@ -1031,7 +1219,7 @@ local function CreateOptionsWindow()
     end)
 
     local lineLabel = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    lineLabel:SetPoint("TOPLEFT", 52, -444)
+    lineLabel:SetPoint("TOPLEFT", 52, -488)
     lineLabel:SetText("Linie")
     lineLabel:SetTextColor(0.75, 0.66, 0.5)
     local lineLess = MakeFontStep("-")
@@ -1121,7 +1309,7 @@ local function CreateOptionsWindow()
 
     local previewBox = CreateFrame("Frame", nil, window, "BackdropTemplate")
     previewBox:SetSize(96, 96)
-    previewBox:SetPoint("TOPRIGHT", -36, -380)
+    previewBox:SetPoint("TOPRIGHT", -36, -424)
     previewBox:EnableMouse(false)
     previewBox:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -1213,6 +1401,14 @@ local function HandleSlashCommand(message)
         else
             Print("FPS-Anzeige: " .. (IsEnabled("showFps") and "an" or "aus") .. ". /tweaks fps an|aus")
         end
+    elseif feature == "combo" or feature == "punkte" then
+        if value == "on" or value == "an" then
+            SetOption("comboPoints", true)
+        elseif value == "off" or value == "aus" then
+            SetOption("comboPoints", false)
+        else
+            Print("Combo-Punkte: " .. (IsEnabled("comboPoints") and "an" or "aus") .. ". /tweaks combo an|aus")
+        end
     elseif feature == "karte" or feature == "makros" or feature == "fenster" or feature == "optionen" then
         if feature == "karte" then
             if value == "an" or value == "aus" then SetOption("disableMapFade", value == "an") else Print("Verwendung: /tweaks karte an|aus") end
@@ -1232,6 +1428,8 @@ frame:RegisterEvent("ADDON_LOADED")
 pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_ADDED")
 pcall(frame.RegisterEvent, frame, "NAME_PLATE_UNIT_REMOVED")
 pcall(frame.RegisterEvent, frame, "PLAYER_TARGET_CHANGED")
+pcall(frame.RegisterEvent, frame, "UNIT_COMBO_POINTS")
+pcall(frame.RegisterEvent, frame, "UNIT_POWER_UPDATE")
 pcall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
 pcall(frame.RegisterEvent, frame, "ACTIONBAR_SLOT_CHANGED")
 pcall(frame.RegisterEvent, frame, "UPDATE_BONUS_ACTIONBAR")
@@ -1239,7 +1437,7 @@ pcall(frame.RegisterEvent, frame, "ACTIONBAR_PAGE_CHANGED")
 pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORM")
 pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORMS")
 pcall(frame.RegisterEvent, frame, "PLAYER_REGEN_ENABLED")
-frame:SetScript("OnEvent", function(_, event, loadedAddon)
+frame:SetScript("OnEvent", function(_, event, loadedAddon, arg2)
     if event == "NAME_PLATE_UNIT_ADDED" then
         activeNameplateUnits[loadedAddon] = true
         local plate = NamePlateFor(loadedAddon)
@@ -1248,6 +1446,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         end
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
         if IsEnabled("npcNameOnly") then ApplyNpcNameOnly(loadedAddon) end
+        if SimpleTweaksDB and SimpleTweaksDB.comboPoints then UpdateComboPlate(loadedAddon) end
         return
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         local plate = nameplateByUnit[loadedAddon]
@@ -1256,6 +1455,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
             plate = NamePlateFor(loadedAddon)
         end
         if plate then RestoreNpcPlate(plate) end
+        if plate then HideCombo(plate) end
         activeNameplateUnits[loadedAddon] = nil
         local entry = nameplateIndicators[loadedAddon]
         if entry then SetIndicatorColor(entry, nil) end
@@ -1263,8 +1463,9 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         if currentTargetUnit == loadedAddon then currentTargetUnit = nil end
         if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
         return
-    elseif event == "PLAYER_TARGET_CHANGED" then
-        if IsEnabled("hunterRangeIndicator") then SetNameplateIndicatorEnabled(true) end
+    elseif event == "PLAYER_TARGET_CHANGED" or event == "UNIT_COMBO_POINTS" or (event == "UNIT_POWER_UPDATE" and (arg2 == nil or arg2 == "COMBO_POINTS")) then
+        if IsEnabled("hunterRangeIndicator") and event == "PLAYER_TARGET_CHANGED" then SetNameplateIndicatorEnabled(true) end
+        if SimpleTweaksDB and SimpleTweaksDB.comboPoints then RefreshComboPoints() end
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         UpdateStanceBar()
@@ -1276,6 +1477,9 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
         UpdateFpsCounter()
         if IsEnabled("npcNameOnly") then
             RefreshNpcNameOnly()
+        end
+        if SimpleTweaksDB and SimpleTweaksDB.comboPoints then
+            RefreshComboPoints()
         end
         return
     end
@@ -1329,6 +1533,9 @@ frame:SetScript("OnUpdate", function(_, elapsed)
         end
         if SimpleTweaksDB and SimpleTweaksDB.showFps then
             UpdateFpsCounter()
+        end
+        if SimpleTweaksDB and SimpleTweaksDB.comboPoints then
+            RefreshComboPoints()
         end
     end
 end)
