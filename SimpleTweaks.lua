@@ -702,14 +702,26 @@ local function AnchorCombo(plate, holder)
     if unitFrame and unitFrame.IsForbidden and unitFrame:IsForbidden() then
         unitFrame = nil
     end
-    local anchor = unitFrame or plate
+    local anchor = unitFrame
+    if unitFrame then
+        local container = unitFrame.HealthBarsContainer
+        if container and not (container.IsForbidden and container:IsForbidden()) then
+            anchor = container
+        else
+            local bar = unitFrame.healthBar or unitFrame.HealthBar
+            if bar and not (bar.IsForbidden and bar:IsForbidden()) then
+                anchor = bar
+            end
+        end
+    end
+    anchor = anchor or plate
     if holder.anchor == anchor then
         return
     end
     holder:ClearAllPoints()
-    local placed = pcall(holder.SetPoint, holder, "TOP", anchor, "BOTTOM", 0, -2)
+    local placed = pcall(holder.SetPoint, holder, "TOP", anchor, "BOTTOM", 0, -3)
     if not placed and anchor ~= plate then
-        pcall(holder.SetPoint, holder, "TOP", plate, "BOTTOM", 0, -2)
+        pcall(holder.SetPoint, holder, "TOP", plate, "BOTTOM", 0, 10)
         anchor = plate
     end
     holder.anchor = anchor
