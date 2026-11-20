@@ -2,8 +2,17 @@
 ## Title: SimpleTweaks
 ## Notes: Small quality-of-life tweaks for World of Warcraft: Forever.
 ## Author: SimpleTweaks
-## Version: 1.2.29
+## Version: 1.2.30
 ## SavedVariables: SimpleTweaksDB
 
 SimpleTweaks.lua
+SimpleTweaksMap.lua
+SimpleTweaksMacros.lua
+SimpleTweaksStance.lua
+SimpleTweaksFps.lua
+SimpleTweaksRange.lua
+SimpleTweaksNpc.lua
+SimpleTweaksCombo.lua
 SimpleTweaksSwing.lua
+SimpleTweaksOptions.lua
+SimpleTweaksEvents.lua

@@ -19,6 +19,8 @@ Kopiere den Ordner `SimpleTweaks` in `World of Warcraft/_forever_/Interface/AddO
 
 Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 
+Die Funktionen liegen in eigenen Dateien: `SimpleTweaksMap`, `SimpleTweaksMacros`, `SimpleTweaksStance`, `SimpleTweaksFps`, `SimpleTweaksRange`, `SimpleTweaksNpc`, `SimpleTweaksCombo`, `SimpleTweaksSwing` und `SimpleTweaksOptions`. `SimpleTweaks.lua` hält nur die gemeinsamen Helfer, `SimpleTweaksEvents.lua` die Ereignisse.
+
 ## Use
 
 Öffne das Einstellungsfenster über das Addon-Kompartiment oben rechts oder mit `/tweaks`.
