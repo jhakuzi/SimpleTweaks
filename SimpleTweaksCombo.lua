@@ -96,7 +96,7 @@ local function EnsureCombo(plate)
         border:Hide()
         local dot = holder:CreateTexture(nil, "OVERLAY", nil, 2)
         dot:SetTexture("Interface\\Buttons\\WHITE8X8")
-        dot:SetColorTexture(1, 0, 0, 1)
+        dot:SetColorTexture(0.82, 0.24, 0.08, 1)
         dot:SetSize(COMBO_DOT, COMBO_DOT)
         dot:Hide()
         if holder.CreateMaskTexture then
