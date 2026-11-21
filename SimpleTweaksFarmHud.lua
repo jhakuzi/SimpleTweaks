@@ -1,9 +1,11 @@
--- Die Blizzard-Minimap als transparente, nicht anklickbare Anzeige in der Bildschirmmitte.
+-- Die Blizzard-Minimap als transparente Anzeige mit einem Umschalter am Kartenrand.
 local ST = SimpleTweaks
 local original
+local toggleButton
+local hudOpen = false
 
 local function DisableMouseTree(frame)
-    if frame:IsForbidden() or not frame:CanChangeProtectedState() then
+    if frame == toggleButton or frame:IsForbidden() or not frame:CanChangeProtectedState() then
         return
     end
 
@@ -90,23 +92,78 @@ local function UndockMinimap(map)
     map:SetAlpha(0)
 end
 
-function ST.UpdateFarmHud()
-    if InCombatLockdown() then
-        return
-    end
+local function CreateToggleButton(map)
+    local button = CreateFrame("Button", nil, map)
+    button:SetSize(28, 28)
+    button:SetFrameLevel(map:GetFrameLevel() + 8)
+    button:SetIgnoreParentAlpha(true)
+    button:EnableMouse(true)
+    button:EnableMouseWheel(false)
+    button:RegisterForClicks("LeftButtonUp")
 
-    local editing = EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive()
+    local rim = button:CreateTexture(nil, "BACKGROUND")
+    rim:SetAllPoints(button)
+    rim:SetAtlas("ui-hud-minimap-button")
+
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(18, 18)
+    icon:SetPoint("CENTER")
+    icon:SetTexture("Interface\\AddOns\\" .. ST.addonName .. "\\Media\\FarmHudIcon.tga")
+    local mask = button:CreateMaskTexture()
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMP", "CLAMP")
+    mask:SetAllPoints(icon)
+    icon:AddMaskTexture(mask)
+    button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", "ADD")
+
+    button:SetScript("OnClick", function()
+        GameTooltip:Hide()
+        hudOpen = not hudOpen
+        ST.UpdateFarmHud()
+    end)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText("FarmHUD")
+        GameTooltip:AddLine(hudOpen and "Minimap zurücksetzen" or "FarmHUD anzeigen", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    return button
+end
+
+function ST.UpdateFarmHudButton()
     local map = Minimap
-    if not map or not ST.IsEnabled("farmHud") or editing then
-        DockMinimap()
+    if not map or not SimpleTweaksDB or not SimpleTweaksDB.farmHud then
+        if toggleButton then
+            toggleButton:Hide()
+        end
         return
     end
 
-    if not original then
-        UndockMinimap(map)
+    toggleButton = toggleButton or CreateToggleButton(map)
+    local width, height = map:GetSize()
+    toggleButton:ClearAllPoints()
+    toggleButton:SetPoint("CENTER", map, "CENTER", width * 0.24, -height * 0.44)
+    toggleButton:Show()
+end
+
+function ST.UpdateFarmHud()
+    if not InCombatLockdown() then
+        local map = Minimap
+        local editing = EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive()
+        if map and hudOpen and not editing then
+            if not original then
+                UndockMinimap(map)
+            end
+            local size = SimpleTweaksDB.farmHudSize * UIParent:GetEffectiveScale() / map:GetEffectiveScale()
+            map:SetSize(size, size)
+        else
+            DockMinimap()
+        end
     end
-    local size = SimpleTweaksDB.farmHudSize * UIParent:GetEffectiveScale() / map:GetEffectiveScale()
-    map:SetSize(size, size)
+    ST.UpdateFarmHudButton()
 end
 
 EventRegistry:RegisterCallback("EditMode.Enter", ST.UpdateFarmHud, ST)

@@ -32,7 +32,7 @@ local function SetOption(setting, enabled)
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "farmHud" then
-        ST.UpdateFarmHud()
+        ST.UpdateFarmHudButton()
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
         SimpleTweaksSwing.SetEnabled(enabled)
     elseif setting == "fiveSec" and SimpleTweaksFiveSec and SimpleTweaksFiveSec.SetEnabled then
@@ -46,7 +46,7 @@ local function SetOption(setting, enabled)
         showFps = enabled and "FPS-Anzeige aktiviert." or "FPS-Anzeige ausgeblendet.",
         comboPoints = enabled and "Combo-Punkte aktiviert." or "Combo-Punkte ausgeblendet.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
-        farmHud = enabled and "FarmHUD aktiviert." or "FarmHUD deaktiviert.",
+        farmHud = enabled and "FarmHUD-Button eingeblendet." or "FarmHUD-Button ausgeblendet.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
         fiveSec = enabled and "5-Sekunden-Regel aktiviert." or "5-Sekunden-Regel ausgeblendet.",
     }
