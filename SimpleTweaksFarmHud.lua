@@ -92,14 +92,81 @@ local function UndockMinimap(map)
     map:SetAlpha(0)
 end
 
+local function PositionToggleButton(button, map)
+    button:ClearAllPoints()
+
+    local screenPosition = SimpleTweaksDB.farmHudButtonScreen
+    if original and screenPosition then
+        local scale = UIParent:GetEffectiveScale() / button:GetEffectiveScale()
+        button:SetPoint("CENTER", UIParent, "CENTER", screenPosition.x * scale, screenPosition.y * scale)
+        return
+    end
+
+    local width, height = map:GetSize()
+    local rimPosition = SimpleTweaksDB.farmHudButtonRim
+    local x = rimPosition and rimPosition.x or 0.24
+    local y = rimPosition and rimPosition.y or -0.44
+    button:SetPoint("CENTER", map, "CENTER", width * x, height * y)
+end
+
+local function MoveToggleButton(button, map, cursorX, cursorY)
+    if original then
+        local scale = UIParent:GetEffectiveScale()
+        local x, y = UIParent:GetCenter()
+        SimpleTweaksDB.farmHudButtonScreen = {x = cursorX / scale - x, y = cursorY / scale - y}
+    else
+        local x, y = map:GetCenter()
+        local width, height = map:GetSize()
+        if not x or width <= 0 or height <= 0 then
+            return
+        end
+        local scale = map:GetEffectiveScale()
+        local dx = (cursorX / scale - x) / width
+        local dy = (cursorY / scale - y) / height
+        local distance = math.sqrt(dx * dx + dy * dy)
+        if distance == 0 then
+            return
+        end
+        SimpleTweaksDB.farmHudButtonRim = {x = dx / (2 * distance), y = dy / (2 * distance)}
+    end
+    PositionToggleButton(button, map)
+end
+
+local function StopToggleDrag(button)
+    button:SetScript("OnUpdate", nil)
+end
+
+local function StartToggleDrag(button, map)
+    local centerX, centerY = button:GetCenter()
+    if not centerX then
+        return
+    end
+    GameTooltip:Hide()
+
+    local cursorX, cursorY = GetCursorPosition()
+    local scale = button:GetEffectiveScale()
+    local offsetX, offsetY = centerX * scale - cursorX, centerY * scale - cursorY
+    local mapState = original
+    button:SetScript("OnUpdate", function(self)
+        if original ~= mapState then
+            StopToggleDrag(self)
+            return
+        end
+        local x, y = GetCursorPosition()
+        MoveToggleButton(self, map, x + offsetX, y + offsetY)
+    end)
+end
+
 local function CreateToggleButton(map)
     local button = CreateFrame("Button", nil, map)
     button:SetSize(28, 28)
     button:SetFrameLevel(map:GetFrameLevel() + 8)
     button:SetIgnoreParentAlpha(true)
+    button:SetClampedToScreen(true)
     button:EnableMouse(true)
     button:EnableMouseWheel(false)
     button:RegisterForClicks("LeftButtonUp")
+    button:RegisterForDrag("RightButton")
 
     local rim = button:CreateTexture(nil, "OVERLAY")
     rim:SetAllPoints(button)
@@ -115,15 +182,22 @@ local function CreateToggleButton(map)
     icon:AddMaskTexture(mask)
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", "ADD")
 
-    button:SetScript("OnClick", function()
+    button:SetScript("OnClick", function(self)
+        StopToggleDrag(self)
         GameTooltip:Hide()
         hudOpen = not hudOpen
         ST.UpdateFarmHud()
     end)
+    button:SetScript("OnDragStart", function(self)
+        StartToggleDrag(self, map)
+    end)
+    button:SetScript("OnDragStop", StopToggleDrag)
+    button:SetScript("OnHide", StopToggleDrag)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText("FarmHUD")
         GameTooltip:AddLine(hudOpen and "Minimap zurücksetzen" or "FarmHUD anzeigen", 1, 1, 1)
+        GameTooltip:AddLine("Mit der rechten Maustaste ziehen.", 1, 1, 1)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function()
@@ -143,9 +217,7 @@ function ST.UpdateFarmHudButton()
     end
 
     toggleButton = toggleButton or CreateToggleButton(map)
-    local width, height = map:GetSize()
-    toggleButton:ClearAllPoints()
-    toggleButton:SetPoint("CENTER", map, "CENTER", width * 0.24, -height * 0.44)
+    PositionToggleButton(toggleButton, map)
     toggleButton:Show()
 end
 

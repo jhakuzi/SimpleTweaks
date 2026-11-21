@@ -33,7 +33,8 @@ Die Funktionen liegen in eigenen Dateien: `SimpleTweaksMap`, `SimpleTweaksMacros
 - `/tweaks nsc an|aus` blendet bei freundlichen NSCs Lebensbalken und Stufenanzeige aus.
 - `/tweaks fps an|aus` schaltet die FPS-Anzeige unten rechts um. Die Einstellung bleibt nach `/reload` und erneutem Einloggen erhalten.
 - `/tweaks combo an|aus` zeigt Combo-Punkte als rote Kreise unter der feindlichen Namensplakette.
-- Die Checkbox **FarmHUD** blendet den Umschalter am unteren rechten Minimap-Rand ein oder aus. Der Umschalter verschiebt die Minimap in die Bildschirmmitte und beim nächsten Klick wieder zurück. Er wandert mit der Karte mit. Die aktiven Kräuter-, Erz- und Questmarkierungen bleiben sichtbar. Außerhalb des Umschalters gehen Klicks und das Mausrad durch das HUD hindurch. Mit **Einstellungen** lässt sich die Größe wählen. Änderungen an der Projektion werden nach dem Kampf angewendet.
+- Die Checkbox **FarmHUD** blendet den Umschalter ein oder aus. Ein Linksklick auf den Umschalter verschiebt die Minimap in die Bildschirmmitte und der nächste Linksklick bringt sie zurück. Die aktiven Kräuter-, Erz- und Questmarkierungen bleiben sichtbar. Außerhalb des Umschalters gehen Klicks und das Mausrad durch das HUD hindurch. Mit **Einstellungen** lässt sich die Größe wählen. Ein Wechsel im Kampf wird bis zum Kampfende vorgemerkt.
+- Mit der rechten Maustaste lässt sich der FarmHUD-Umschalter am normalen Minimap-Rand entlangziehen und bei aktiver Projektion frei platzieren. Beide Positionen werden separat gespeichert.
 - `/tweaks schwung an|aus` schaltet den Schwungtimer um.
 - `/tweaks regel an|aus` schaltet die 5-Sekunden-Regel um.
 - Die Kreiseinstellungen von Schwungtimer und 5-Sekunden-Regel stehen nicht mehr im Hauptfenster. Neben der Checkbox öffnet **Einstellungen** ein kleines Fenster dafür.
