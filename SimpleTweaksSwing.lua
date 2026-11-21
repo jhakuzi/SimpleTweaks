@@ -1095,7 +1095,7 @@ local function ExitEditMode()
 end
 
 local function SyncEditMode()
-    local shown = EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
+    local shown = enabled and EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
     if shown and not editing then
         EnterEditMode()
     elseif not shown and editing then
@@ -1290,6 +1290,7 @@ function SimpleTweaksSwing.SetEnabled(on)
             ClearHand(hand)
         end
     end
+    SyncEditMode()
     RefreshText()
 end
 

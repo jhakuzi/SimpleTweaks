@@ -15,5 +15,6 @@ SimpleTweaksNpc.lua
 SimpleTweaksCombo.lua
 SimpleTweaksSwing.lua
 SimpleTweaksFiveSec.lua
+SimpleTweaksFarmHud.lua
 SimpleTweaksOptions.lua
 SimpleTweaksEvents.lua

@@ -67,8 +67,12 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon, arg2)
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         ST.UpdateStanceBar()
+        ST.UpdateFarmHud()
         return
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_BONUS_ACTIONBAR" or event == "ACTIONBAR_PAGE_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_SHAPESHIFT_FORMS" then
+        if event == "PLAYER_ENTERING_WORLD" then
+            ST.UpdateFarmHud()
+        end
         ST.HookFutureMacroButtons()
         ST.RefreshMacroNames()
         ST.UpdateStanceBar()

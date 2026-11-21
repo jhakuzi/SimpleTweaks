@@ -31,6 +31,8 @@ local function SetOption(setting, enabled)
         RefreshComboPoints()
     elseif setting == "hunterRangeIndicator" then
         SetNameplateIndicatorEnabled(enabled)
+    elseif setting == "farmHud" then
+        ST.UpdateFarmHud()
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
         SimpleTweaksSwing.SetEnabled(enabled)
     elseif setting == "fiveSec" and SimpleTweaksFiveSec and SimpleTweaksFiveSec.SetEnabled then
@@ -44,6 +46,7 @@ local function SetOption(setting, enabled)
         showFps = enabled and "FPS-Anzeige aktiviert." or "FPS-Anzeige ausgeblendet.",
         comboPoints = enabled and "Combo-Punkte aktiviert." or "Combo-Punkte ausgeblendet.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
+        farmHud = enabled and "FarmHUD aktiviert." or "FarmHUD deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
         fiveSec = enabled and "5-Sekunden-Regel aktiviert." or "5-Sekunden-Regel ausgeblendet.",
     }
@@ -57,7 +60,7 @@ local function CreateOptionsWindow()
     local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
     optionsWindow = window
     window:Hide()
-    window:SetSize(680, 480)
+    window:SetSize(680, 524)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -97,6 +100,7 @@ local function CreateOptionsWindow()
     AddOption("comboPoints", "Combo-Punkte unter feindlichen Namensplaketten", -332)
     AddOption("swingTimer", "Schwungtimer", -376)
     AddOption("fiveSec", "5-Sekunden-Regel", -420)
+    AddOption("farmHud", "FarmHUD", -464)
 
     local widgetParent = window
 
@@ -640,8 +644,34 @@ local function CreateOptionsWindow()
     BuildCircleSettings(swingPopup, "swingTimer", "SimpleTweaksSwing")
     local fivePopup = MakeSettingsPopup("5-Sekunden-Regel")
     BuildCircleSettings(fivePopup, "fiveSec", "SimpleTweaksFiveSec")
+    local farmPopup = MakeSettingsPopup("FarmHUD")
+    farmPopup:SetSize(322, 104)
+    widgetParent = farmPopup
+    local sizeLabel = farmPopup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sizeLabel:SetPoint("TOPLEFT", 16, -49)
+    sizeLabel:SetText("Größe")
+    local farmSizes = { 320, 440, 560 }
+    local farmChoices = {}
+    local function PaintFarmSize()
+        for index, button in ipairs(farmChoices) do
+            PaintChoice(button, SimpleTweaksDB.farmHudSize == farmSizes[index])
+        end
+    end
+    for index, label in ipairs({ "Klein", "Mittel", "Groß" }) do
+        local size = farmSizes[index]
+        local button = MakeChoice(label, 72)
+        button:SetPoint("LEFT", sizeLabel, "RIGHT", 12 + (index - 1) * 76, 0)
+        button:SetScript("OnClick", function()
+            SimpleTweaksDB.farmHudSize = size
+            ST.UpdateFarmHud()
+            PaintFarmSize()
+        end)
+        farmChoices[index] = button
+    end
+    farmPopup:SetScript("OnShow", PaintFarmSize)
     GearButton(-376, swingPopup)
     GearButton(-420, fivePopup)
+    GearButton(-464, farmPopup)
 
     return window
 end
