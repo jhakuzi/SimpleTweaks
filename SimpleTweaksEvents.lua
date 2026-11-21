@@ -106,6 +106,9 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon, arg2)
     if SimpleTweaksSwing and SimpleTweaksSwing.Init then
         SimpleTweaksSwing.Init()
     end
+    if SimpleTweaksFiveSec and SimpleTweaksFiveSec.Init then
+        SimpleTweaksFiveSec.Init()
+    end
     if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
         AddonCompartmentFrame:RegisterAddon({ text = "SimpleTweaks", icon = "Interface\\Icons\\INV_Misc_Gear_01", notCheckable = true, func = ST.OpenOptions })
     end
