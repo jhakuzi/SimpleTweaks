@@ -1,6 +1,7 @@
 -- 5-Sekunden-Regel (Five-Second Rule): Spirit-Manaregeneration pausiert 5 Sekunden,
--- nachdem ein Zauber Mana gekostet hat. Manafreie Zauber lösen sie nicht aus.
+-- nachdem ein Zauber Mana gekostet hat.
 -- Erkennung: UNIT_SPELLCAST_SUCCEEDED / UNIT_SPELLCAST_CHANNEL_START plus gesunkenes UnitPower(player, Mana).
+-- Bei geheimem Mana dienen die vom Client gemeldeten Manakosten als Schätzung.
 local FONT_MIN = 10
 local FONT_MAX = 64
 local DEFAULT_FONT_SIZE = 18
@@ -907,6 +908,7 @@ local function ReadRemain()
 end
 
 local FSR_SECONDS = 5
+local MANA_POWER = Enum and Enum.PowerType and Enum.PowerType.Mana or 0
 local fsrExpiry
 local lastMana
 local castAt = 0
@@ -914,20 +916,41 @@ local manaDroppedAt = 0
 local RefreshText
 
 local function ManaValue()
-    local index = 0
-    if Enum and Enum.PowerType and Enum.PowerType.Mana ~= nil then
-        index = Enum.PowerType.Mana
-    end
     if type(UnitPower) ~= "function" then
         return nil
     end
-    local ok, value = pcall(UnitPower, "player", index)
+    local ok, value = pcall(UnitPower, "player", MANA_POWER)
     if not ok then
         return nil
     end
     if PlainNumber(value) then
         return value
     end
+    return nil, issecretvalue and issecretvalue(value)
+end
+
+local function HasManaCost(spellID)
+    if not PlainNumber(spellID) or not C_Spell or type(C_Spell.GetSpellPowerCost) ~= "function" then
+        return false
+    end
+    local ok, costs = pcall(C_Spell.GetSpellPowerCost, spellID)
+    if not ok or type(costs) ~= "table" or (issecretvalue and issecretvalue(costs)) then
+        return false
+    end
+    for _, cost in ipairs(costs) do
+        if cost.type == MANA_POWER and (cost.requiredAuraID == 0 or cost.hasRequiredAura)
+            and (cost.cost > 0 or cost.costPercent > 0 or cost.costPerSec > 0) then
+            return true
+        end
+    end
+    return false
+end
+
+local function StartRule(now)
+    castAt = 0
+    manaDroppedAt = 0
+    fsrExpiry = now + FSR_SECONDS
+    RefreshText()
 end
 
 local function TryStartRule()
@@ -938,10 +961,7 @@ local function TryStartRule()
     if now - castAt > 0.4 or now - manaDroppedAt > 0.4 then
         return
     end
-    castAt = 0
-    manaDroppedAt = 0
-    fsrExpiry = now + FSR_SECONDS
-    RefreshText()
+    StartRule(now)
 end
 
 local function NextSwing(now)
@@ -1330,13 +1350,23 @@ local function HandleSwing(duration, swingType)
     RefreshText()
 end
 
-driver:SetScript("OnEvent", function(_, event, unit)
+driver:SetScript("OnEvent", function(_, event, unit, _castGUID, spellID)
     if event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_CHANNEL_START" then
         if unit ~= "player" then
             return
         end
         castAt = GetTime()
-        local mana = ManaValue()
+        local mana, manaIsSecret = ManaValue()
+        if manaIsSecret then
+            lastMana = nil
+            if enabled and HasManaCost(spellID) then
+                StartRule(castAt)
+            else
+                castAt = 0
+                manaDroppedAt = 0
+            end
+            return
+        end
         if mana and lastMana and mana < lastMana then
             manaDroppedAt = castAt
             lastMana = mana
