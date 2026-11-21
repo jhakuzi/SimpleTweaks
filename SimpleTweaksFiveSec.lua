@@ -925,7 +925,9 @@ local function ManaValue()
     if not ok then
         return nil
     end
-    return PlainNumber(value)
+    if PlainNumber(value) then
+        return value
+    end
 end
 
 local function TryStartRule()
