@@ -14,6 +14,61 @@ local UpdateFpsCounter = ST.UpdateFpsCounter
 local RefreshComboPoints = ST.RefreshComboPoints
 local SetNameplateIndicatorEnabled = ST.SetNameplateIndicatorEnabled
 
+local function CreateThemedPanel(name)
+    local ok, panel = pcall(CreateFrame, "Frame", name, UIParent, "DefaultPanelTemplate")
+    if not ok or not panel then
+        panel = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
+        panel:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = false,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        panel:SetBackdropColor(0.06, 0.045, 0.03, 0.9)
+        panel:SetBackdropBorderColor(0.78, 0.58, 0.28, 0.95)
+        return panel, false
+    end
+
+    local background = panel.Bg
+    if (type(background) == "table" or type(background) == "userdata") and background.SetColorTexture then
+        background:SetColorTexture(0.06, 0.045, 0.03, 0.9)
+    end
+    local topTileStreaks = panel.TopTileStreaks
+    if (type(topTileStreaks) == "table" or type(topTileStreaks) == "userdata") and topTileStreaks.Hide then
+        topTileStreaks:Hide()
+    end
+    return panel, true
+end
+
+local function SetPanelTitle(panel, title, nativeTitle)
+    if nativeTitle and panel.SetTitle then
+        panel:SetTitle(title)
+        local titleContainer = panel.TitleContainer
+        local titleText = (type(titleContainer) == "table" or type(titleContainer) == "userdata") and titleContainer.TitleText
+        if titleText then
+            titleText:SetTextColor(1, 0.82, 0.15)
+        end
+        return
+    end
+
+    local titleText = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOP", 0, -20)
+    titleText:SetText(title)
+    titleText:SetTextColor(1, 0.82, 0.15)
+end
+
+local function StyleNativeButton(button, text, width, height)
+    button:SetSize(width, height)
+    if button.SetNormalFontObject then
+        button:SetNormalFontObject("GameFontNormalSmall")
+    end
+    if button.Text and button.Text.SetFontObject then
+        button.Text:SetFontObject("GameFontNormalSmall")
+    end
+    button:SetText(text)
+end
+
 local function SetOption(setting, enabled)
     SimpleTweaksDB[setting] = enabled
 
@@ -61,7 +116,7 @@ end
 local function CreateOptionsWindow()
     if optionsWindow then return optionsWindow end
 
-    local window = CreateFrame("Frame", "SimpleTweaksOptionsWindow", UIParent, "BackdropTemplate")
+    local window, nativeTitle = CreateThemedPanel("SimpleTweaksOptionsWindow")
     optionsWindow = window
     window:Hide()
     window:SetSize(680, 524)
@@ -73,13 +128,7 @@ local function CreateOptionsWindow()
     window:RegisterForDrag("LeftButton")
     window:SetScript("OnDragStart", window.StartMoving)
     window:SetScript("OnDragStop", window.StopMovingOrSizing)
-    window:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = false, edgeSize = 24, insets = { left = 8, right = 8, top = 8, bottom = 8 } })
-    window:SetBackdropColor(0, 0, 0, 0.96)
-    window:SetBackdropBorderColor(0.65, 0.38, 0.16, 1)
-
-    local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", 0, -20)
-    title:SetText("|cffffd27fSimpleTweaks|r")
+    SetPanelTitle(window, "SimpleTweaks", nativeTitle)
 
     local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -5, -5)
@@ -123,20 +172,18 @@ local function CreateOptionsWindow()
     end
 
     local function PaintChoice(button, active)
-        button.label:SetTextColor(active and 1 or 0.55, active and 0.86 or 0.48, active and 0.55 or 0.38)
-        button.bg:SetColorTexture(0.65, 0.38, 0.16, active and 0.55 or 0)
+        local red, green, blue = active and 0.78 or 1, active and 0.78 or 0.82, active and 0.78 or 0.15
+        button.Text:SetTextColor(red, green, blue)
+        for _, texture in ipairs({ button.Left, button.Middle, button.Right }) do
+            if texture and texture.SetDesaturated then
+                texture:SetDesaturated(active)
+            end
+        end
     end
 
     local function MakeChoice(labelText, width)
-        local button = CreateFrame("Button", nil, widgetParent)
-        button:SetSize(width, 22)
-        local bg = button:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-        button.bg = bg
-        local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        label:SetPoint("CENTER", 0, 1)
-        label:SetText(labelText)
-        button.label = label
+        local button = CreateFrame("Button", nil, widgetParent, "GameMenuButtonTemplate")
+        StyleNativeButton(button, labelText, width, 22)
         return button
     end
 
@@ -609,7 +656,7 @@ local function CreateOptionsWindow()
 
 
     local function MakeSettingsPopup(title)
-        local popup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        local popup, nativeTitle = CreateThemedPanel(nil)
         popup:SetSize(700, 210)
         popup:SetPoint("CENTER")
         popup:SetFrameStrata("DIALOG")
@@ -620,22 +667,16 @@ local function CreateOptionsWindow()
         popup:RegisterForDrag("LeftButton")
         popup:SetScript("OnDragStart", popup.StartMoving)
         popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
-        popup:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = false, edgeSize = 24, insets = { left = 8, right = 8, top = 8, bottom = 8 } })
-        popup:SetBackdropColor(0.05, 0.05, 0.05, 0.98)
-        popup:SetBackdropBorderColor(0.65, 0.38, 0.16, 1)
-        local titleText = popup:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        titleText:SetPoint("TOP", 0, -16)
-        titleText:SetText("|cffffd27f" .. title .. "|r")
+        SetPanelTitle(popup, title, nativeTitle)
         local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
         close:SetPoint("TOPRIGHT", -4, -4)
         close:SetScript("OnClick", function() popup:Hide() end)
         return popup
     end
     local function GearButton(y, popup)
-        local button = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
-        button:SetSize(118, 22)
+        local button = CreateFrame("Button", nil, window, "GameMenuButtonTemplate")
+        StyleNativeButton(button, "Einstellungen", 118, 22)
         button:SetPoint("TOPLEFT", 430, y + 4)
-        button:SetText("Einstellungen")
         button:SetScript("OnClick", function()
             if popup:IsShown() then
                 popup:Hide()
