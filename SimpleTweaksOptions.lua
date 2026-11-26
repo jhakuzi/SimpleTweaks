@@ -58,6 +58,25 @@ local function SetPanelTitle(panel, title, nativeTitle)
     titleText:SetTextColor(1, 0.82, 0.15)
 end
 
+local function GetFrameLevel(frame)
+    if frame and frame.GetFrameLevel then
+        return frame:GetFrameLevel()
+    end
+    return 0
+end
+
+local function AddPanelCloseButton(panel)
+    local close = CreateFrame("Button", nil, panel, "UIPanelCloseButtonDefaultAnchors")
+    local frameLevel = math.max(
+        panel:GetFrameLevel(),
+        GetFrameLevel(panel.TitleContainer),
+        GetFrameLevel(panel.NineSlice),
+        close:GetFrameLevel()
+    )
+    close:SetFrameLevel(frameLevel + 1)
+    close:SetScript("OnClick", function() panel:Hide() end)
+end
+
 local function StyleNativeButton(button, text, width, height)
     button:SetSize(width, height)
     if button.SetNormalFontObject then
@@ -105,7 +124,7 @@ local function SetOption(setting, enabled)
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         farmHud = enabled and "FarmHUD-Button eingeblendet." or "FarmHUD-Button ausgeblendet.",
         farmHudRotate = enabled and "FarmHUD-Kartendrehung aktiviert." or "FarmHUD-Kartendrehung deaktiviert.",
-        farmHudQuestBlobs = enabled and "Blaue Questbereiche im FarmHUD eingeblendet." or "Blaue Questbereiche im FarmHUD ausgeblendet.",
+        farmHudQuestBlobs = enabled and "FarmHUD folgt bei Questbereichen der WoW-Einstellung." or "Questbereiche während der Projektion ausgeblendet.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
         fiveSec = enabled and "5-Sekunden-Regel aktiviert." or "5-Sekunden-Regel ausgeblendet.",
     }
@@ -130,9 +149,7 @@ local function CreateOptionsWindow()
     window:SetScript("OnDragStop", window.StopMovingOrSizing)
     SetPanelTitle(window, "SimpleTweaks", nativeTitle)
 
-    local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -5, -5)
-    close:SetScript("OnClick", function() window:Hide() end)
+    AddPanelCloseButton(window)
 
     local function AddOption(key, label, y)
         local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
@@ -668,9 +685,7 @@ local function CreateOptionsWindow()
         popup:SetScript("OnDragStart", popup.StartMoving)
         popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
         SetPanelTitle(popup, title, nativeTitle)
-        local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT", -4, -4)
-        close:SetScript("OnClick", function() popup:Hide() end)
+        AddPanelCloseButton(popup)
         return popup
     end
     local function GearButton(y, popup)

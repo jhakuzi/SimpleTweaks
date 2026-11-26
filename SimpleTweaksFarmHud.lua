@@ -48,7 +48,7 @@ end
 
 function ST.RestoreFarmHudCVars()
     UpdateMinimapCVar("rotateMinimap")
-    UpdateMinimapCVar("minimapShowQuestBlobs")
+    UpdateMinimapCVar("questPOI")
 end
 
 function ST.ToggleFarmHud()
@@ -287,7 +287,7 @@ function ST.UpdateFarmHud()
         end
         local projected = original ~= nil
         UpdateMinimapCVar("rotateMinimap", projected and SimpleTweaksDB.farmHudRotate and "1" or nil)
-        UpdateMinimapCVar("minimapShowQuestBlobs", projected and (SimpleTweaksDB.farmHudQuestBlobs and "1" or "0") or nil)
+        UpdateMinimapCVar("questPOI", projected and not SimpleTweaksDB.farmHudQuestBlobs and "0" or nil)
     end
     ST.UpdateFarmHudButton()
 end
