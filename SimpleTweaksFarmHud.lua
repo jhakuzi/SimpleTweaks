@@ -3,47 +3,57 @@ local ST = SimpleTweaks
 local original
 local toggleButton
 local hudOpen = false
-local previousRotation
+local previousMinimapCVars = {}
 
-local function GetMinimapRotation()
+BINDING_HEADER_SIMPLETWEAKS = "SimpleTweaks"
+BINDING_NAME_SIMPLETWEAKS_TOGGLE_FARMHUD = "FarmHUD-Projektion umschalten"
+
+local function GetMinimapCVar(name)
     if type(GetCVar) ~= "function" then
         return nil
     end
-    local ok, value = pcall(GetCVar, "rotateMinimap")
+    local ok, value = pcall(GetCVar, name)
     if not ok or value == nil then
         return nil
     end
     return tostring(value)
 end
 
-local function SetMinimapRotation(value)
+local function SetMinimapCVar(name, value)
     if type(SetCVar) ~= "function" then
         return false
     end
-    local ok = pcall(SetCVar, "rotateMinimap", value)
-    return ok and GetMinimapRotation() == value
+    local ok = pcall(SetCVar, name, value)
+    return ok and GetMinimapCVar(name) == value
 end
 
-local function UpdateMinimapRotation(enabled)
-    if not enabled and previousRotation == nil then
+local function UpdateMinimapCVar(name, value)
+    local previousValue = previousMinimapCVars[name]
+    if value == nil and previousValue == nil then
         return
     end
-    local current = GetMinimapRotation()
+    local current = GetMinimapCVar(name)
     if current == nil then
         return
     end
 
-    if enabled then
-        if current == "1" or SetMinimapRotation("1") then
-            previousRotation = previousRotation or current
+    if value ~= nil then
+        if current == value or SetMinimapCVar(name, value) then
+            previousMinimapCVars[name] = previousValue or current
         end
-    elseif current == previousRotation or SetMinimapRotation(previousRotation) then
-        previousRotation = nil
+    elseif current == previousValue or SetMinimapCVar(name, previousValue) then
+        previousMinimapCVars[name] = nil
     end
 end
 
-function ST.RestoreFarmHudRotation()
-    UpdateMinimapRotation(false)
+function ST.RestoreFarmHudCVars()
+    UpdateMinimapCVar("rotateMinimap")
+    UpdateMinimapCVar("minimapShowQuestBlobs")
+end
+
+function ST.ToggleFarmHud()
+    hudOpen = not hudOpen
+    ST.UpdateFarmHud()
 end
 
 local function DisableMouseTree(frame)
@@ -227,8 +237,7 @@ local function CreateToggleButton(map)
     button:SetScript("OnClick", function(self)
         StopToggleDrag(self)
         GameTooltip:Hide()
-        hudOpen = not hudOpen
-        ST.UpdateFarmHud()
+        ST.ToggleFarmHud()
     end)
     button:SetScript("OnDragStart", function(self)
         StartToggleDrag(self, map)
@@ -276,7 +285,9 @@ function ST.UpdateFarmHud()
         else
             DockMinimap()
         end
-        UpdateMinimapRotation(original ~= nil and SimpleTweaksDB.farmHudRotate)
+        local projected = original ~= nil
+        UpdateMinimapCVar("rotateMinimap", projected and SimpleTweaksDB.farmHudRotate and "1" or nil)
+        UpdateMinimapCVar("minimapShowQuestBlobs", projected and (SimpleTweaksDB.farmHudQuestBlobs and "1" or "0") or nil)
     end
     ST.UpdateFarmHudButton()
 end

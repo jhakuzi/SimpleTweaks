@@ -33,7 +33,7 @@ local function SetOption(setting, enabled)
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "farmHud" then
         ST.UpdateFarmHudButton()
-    elseif setting == "farmHudRotate" then
+    elseif setting == "farmHudRotate" or setting == "farmHudQuestBlobs" then
         ST.UpdateFarmHud()
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
         SimpleTweaksSwing.SetEnabled(enabled)
@@ -50,6 +50,7 @@ local function SetOption(setting, enabled)
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         farmHud = enabled and "FarmHUD-Button eingeblendet." or "FarmHUD-Button ausgeblendet.",
         farmHudRotate = enabled and "FarmHUD-Kartendrehung aktiviert." or "FarmHUD-Kartendrehung deaktiviert.",
+        farmHudQuestBlobs = enabled and "Blaue Questbereiche im FarmHUD eingeblendet." or "Blaue Questbereiche im FarmHUD ausgeblendet.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
         fiveSec = enabled and "5-Sekunden-Regel aktiviert." or "5-Sekunden-Regel ausgeblendet.",
     }
@@ -648,7 +649,7 @@ local function CreateOptionsWindow()
     local fivePopup = MakeSettingsPopup("5-Sekunden-Regel")
     BuildCircleSettings(fivePopup, "fiveSec", "SimpleTweaksFiveSec")
     local farmPopup = MakeSettingsPopup("FarmHUD")
-    farmPopup:SetSize(322, 142)
+    farmPopup:SetSize(322, 158)
     widgetParent = farmPopup
     local rotateCheck = CreateFrame("CheckButton", nil, farmPopup, "UICheckButtonTemplate")
     rotateCheck:SetPoint("TOPLEFT", 10, -43)
@@ -658,8 +659,16 @@ local function CreateOptionsWindow()
     rotateCheck:SetScript("OnClick", function(self)
         SetOption("farmHudRotate", self:GetChecked())
     end)
+    local questBlobsCheck = CreateFrame("CheckButton", nil, farmPopup, "UICheckButtonTemplate")
+    questBlobsCheck:SetPoint("TOPLEFT", 10, -73)
+    questBlobsCheck:SetChecked(SimpleTweaksDB.farmHudQuestBlobs)
+    questBlobsCheck.Text:SetText("Blaue Questbereiche anzeigen")
+    questBlobsCheck.Text:SetTextColor(0.9, 0.79, 0.61)
+    questBlobsCheck:SetScript("OnClick", function(self)
+        SetOption("farmHudQuestBlobs", self:GetChecked())
+    end)
     local sizeLabel = farmPopup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sizeLabel:SetPoint("TOPLEFT", 16, -94)
+    sizeLabel:SetPoint("TOPLEFT", 16, -118)
     sizeLabel:SetText("Größe")
     local farmSizes = { 320, 440, 560 }
     local farmChoices = {}
@@ -681,6 +690,7 @@ local function CreateOptionsWindow()
     end
     farmPopup:SetScript("OnShow", function()
         rotateCheck:SetChecked(SimpleTweaksDB.farmHudRotate)
+        questBlobsCheck:SetChecked(SimpleTweaksDB.farmHudQuestBlobs)
         PaintFarmSize()
     end)
     GearButton(-376, swingPopup)

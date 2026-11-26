@@ -18,6 +18,7 @@ ST.DEFAULTS = {
     farmHud = false,
     farmHudSize = 440,
     farmHudRotate = false,
+    farmHudQuestBlobs = true,
     swingTimer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,

@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="SIMPLETWEAKS_TOGGLE_FARMHUD" category="BINDING_HEADER_SIMPLETWEAKS">
+        SimpleTweaks.ToggleFarmHud();
+    </Binding>
+</Bindings>

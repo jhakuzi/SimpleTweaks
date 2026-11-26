@@ -53,7 +53,7 @@ pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORMS")
 pcall(frame.RegisterEvent, frame, "PLAYER_REGEN_ENABLED")
 frame:SetScript("OnEvent", function(_, event, loadedAddon, arg2)
     if event == "PLAYER_LOGOUT" then
-        ST.RestoreFarmHudRotation()
+        ST.RestoreFarmHudCVars()
         return
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         OnNameplateAdded(loadedAddon)
