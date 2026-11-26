@@ -44,6 +44,7 @@ pcall(frame.RegisterEvent, frame, "PLAYER_TARGET_CHANGED")
 pcall(frame.RegisterEvent, frame, "UNIT_COMBO_POINTS")
 pcall(frame.RegisterEvent, frame, "UNIT_POWER_UPDATE")
 pcall(frame.RegisterEvent, frame, "PLAYER_ENTERING_WORLD")
+pcall(frame.RegisterEvent, frame, "PLAYER_LOGOUT")
 pcall(frame.RegisterEvent, frame, "ACTIONBAR_SLOT_CHANGED")
 pcall(frame.RegisterEvent, frame, "UPDATE_BONUS_ACTIONBAR")
 pcall(frame.RegisterEvent, frame, "ACTIONBAR_PAGE_CHANGED")
@@ -51,7 +52,10 @@ pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORM")
 pcall(frame.RegisterEvent, frame, "UPDATE_SHAPESHIFT_FORMS")
 pcall(frame.RegisterEvent, frame, "PLAYER_REGEN_ENABLED")
 frame:SetScript("OnEvent", function(_, event, loadedAddon, arg2)
-    if event == "NAME_PLATE_UNIT_ADDED" then
+    if event == "PLAYER_LOGOUT" then
+        ST.RestoreFarmHudRotation()
+        return
+    elseif event == "NAME_PLATE_UNIT_ADDED" then
         OnNameplateAdded(loadedAddon)
         return
     elseif event == "NAME_PLATE_UNIT_REMOVED" then

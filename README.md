@@ -35,6 +35,7 @@ Die Funktionen liegen in eigenen Dateien: `SimpleTweaksMap`, `SimpleTweaksMacros
 - `/tweaks combo an|aus` zeigt Combo-Punkte als rote Kreise unter der feindlichen Namensplakette.
 - Die Checkbox **FarmHUD** blendet den Umschalter ein oder aus. Ein Linksklick auf den Umschalter verschiebt die Minimap in die Bildschirmmitte und der nächste Linksklick bringt sie zurück. Die aktiven Kräuter-, Erz- und Questmarkierungen bleiben sichtbar. Außerhalb des Umschalters gehen Klicks und das Mausrad durch das HUD hindurch. Mit **Einstellungen** lässt sich die Größe wählen. Ein Wechsel im Kampf wird bis zum Kampfende vorgemerkt.
 - Mit der rechten Maustaste lässt sich der FarmHUD-Umschalter am normalen Minimap-Rand entlangziehen und bei aktiver Projektion frei platzieren. Beide Positionen werden separat gespeichert.
+- In den FarmHUD-Einstellungen kann der Spielerpfeil oben bleiben, während sich die Karte mit der Blickrichtung dreht. Beim Schließen des HUDs wird die vorherige Minimap-Ausrichtung wiederhergestellt.
 - `/tweaks schwung an|aus` schaltet den Schwungtimer um.
 - `/tweaks regel an|aus` schaltet die 5-Sekunden-Regel um.
 - Die Kreiseinstellungen von Schwungtimer und 5-Sekunden-Regel stehen nicht mehr im Hauptfenster. Neben der Checkbox öffnet **Einstellungen** ein kleines Fenster dafür.

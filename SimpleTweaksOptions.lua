@@ -33,6 +33,8 @@ local function SetOption(setting, enabled)
         SetNameplateIndicatorEnabled(enabled)
     elseif setting == "farmHud" then
         ST.UpdateFarmHudButton()
+    elseif setting == "farmHudRotate" then
+        ST.UpdateFarmHud()
     elseif setting == "swingTimer" and SimpleTweaksSwing and SimpleTweaksSwing.SetEnabled then
         SimpleTweaksSwing.SetEnabled(enabled)
     elseif setting == "fiveSec" and SimpleTweaksFiveSec and SimpleTweaksFiveSec.SetEnabled then
@@ -47,6 +49,7 @@ local function SetOption(setting, enabled)
         comboPoints = enabled and "Combo-Punkte aktiviert." or "Combo-Punkte ausgeblendet.",
         hunterRangeIndicator = enabled and "Jäger-Reichweitenindikator aktiviert." or "Jäger-Reichweitenindikator deaktiviert.",
         farmHud = enabled and "FarmHUD-Button eingeblendet." or "FarmHUD-Button ausgeblendet.",
+        farmHudRotate = enabled and "FarmHUD-Kartendrehung aktiviert." or "FarmHUD-Kartendrehung deaktiviert.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
         fiveSec = enabled and "5-Sekunden-Regel aktiviert." or "5-Sekunden-Regel ausgeblendet.",
     }
@@ -645,10 +648,18 @@ local function CreateOptionsWindow()
     local fivePopup = MakeSettingsPopup("5-Sekunden-Regel")
     BuildCircleSettings(fivePopup, "fiveSec", "SimpleTweaksFiveSec")
     local farmPopup = MakeSettingsPopup("FarmHUD")
-    farmPopup:SetSize(322, 104)
+    farmPopup:SetSize(322, 142)
     widgetParent = farmPopup
+    local rotateCheck = CreateFrame("CheckButton", nil, farmPopup, "UICheckButtonTemplate")
+    rotateCheck:SetPoint("TOPLEFT", 10, -43)
+    rotateCheck:SetChecked(SimpleTweaksDB.farmHudRotate)
+    rotateCheck.Text:SetText("Karte mit Blickrichtung drehen")
+    rotateCheck.Text:SetTextColor(0.9, 0.79, 0.61)
+    rotateCheck:SetScript("OnClick", function(self)
+        SetOption("farmHudRotate", self:GetChecked())
+    end)
     local sizeLabel = farmPopup:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sizeLabel:SetPoint("TOPLEFT", 16, -49)
+    sizeLabel:SetPoint("TOPLEFT", 16, -94)
     sizeLabel:SetText("Größe")
     local farmSizes = { 320, 440, 560 }
     local farmChoices = {}
@@ -668,7 +679,10 @@ local function CreateOptionsWindow()
         end)
         farmChoices[index] = button
     end
-    farmPopup:SetScript("OnShow", PaintFarmSize)
+    farmPopup:SetScript("OnShow", function()
+        rotateCheck:SetChecked(SimpleTweaksDB.farmHudRotate)
+        PaintFarmSize()
+    end)
     GearButton(-376, swingPopup)
     GearButton(-420, fivePopup)
     GearButton(-464, farmPopup)

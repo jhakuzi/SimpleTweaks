@@ -17,6 +17,7 @@ ST.DEFAULTS = {
     comboPoints = false,
     farmHud = false,
     farmHudSize = 440,
+    farmHudRotate = false,
     swingTimer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,

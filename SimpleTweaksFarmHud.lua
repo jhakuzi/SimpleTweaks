@@ -3,6 +3,48 @@ local ST = SimpleTweaks
 local original
 local toggleButton
 local hudOpen = false
+local previousRotation
+
+local function GetMinimapRotation()
+    if type(GetCVar) ~= "function" then
+        return nil
+    end
+    local ok, value = pcall(GetCVar, "rotateMinimap")
+    if not ok or value == nil then
+        return nil
+    end
+    return tostring(value)
+end
+
+local function SetMinimapRotation(value)
+    if type(SetCVar) ~= "function" then
+        return false
+    end
+    local ok = pcall(SetCVar, "rotateMinimap", value)
+    return ok and GetMinimapRotation() == value
+end
+
+local function UpdateMinimapRotation(enabled)
+    if not enabled and previousRotation == nil then
+        return
+    end
+    local current = GetMinimapRotation()
+    if current == nil then
+        return
+    end
+
+    if enabled then
+        if current == "1" or SetMinimapRotation("1") then
+            previousRotation = previousRotation or current
+        end
+    elseif current == previousRotation or SetMinimapRotation(previousRotation) then
+        previousRotation = nil
+    end
+end
+
+function ST.RestoreFarmHudRotation()
+    UpdateMinimapRotation(false)
+end
 
 local function DisableMouseTree(frame)
     if frame == toggleButton or frame:IsForbidden() or not frame:CanChangeProtectedState() then
@@ -234,6 +276,7 @@ function ST.UpdateFarmHud()
         else
             DockMinimap()
         end
+        UpdateMinimapRotation(original ~= nil and SimpleTweaksDB.farmHudRotate)
     end
     ST.UpdateFarmHudButton()
 end
