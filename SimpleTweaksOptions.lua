@@ -113,6 +113,8 @@ local function SetOption(setting, enabled)
         SimpleTweaksSwing.SetEnabled(enabled)
     elseif setting == "fiveSec" and SimpleTweaksFiveSec and SimpleTweaksFiveSec.SetEnabled then
         SimpleTweaksFiveSec.SetEnabled(enabled)
+    elseif setting == "instantLoot" then
+        ST.SetInstantLootEnabled(enabled)
     end
     local messages = {
         disableMapFade = enabled and "Karten-Ausblenden deaktiviert." or "Karten-Ausblenden wiederhergestellt.",
@@ -127,6 +129,7 @@ local function SetOption(setting, enabled)
         farmHudQuestBlobs = enabled and "FarmHUD folgt bei Questbereichen der WoW-Einstellung." or "Questbereiche während der Projektion ausgeblendet.",
         swingTimer = enabled and "Schwungtimer aktiviert." or "Schwungtimer deaktiviert.",
         fiveSec = enabled and "5-Sekunden-Regel aktiviert." or "5-Sekunden-Regel ausgeblendet.",
+        instantLoot = enabled and "Sofortiges Plündern aktiviert." or "Sofortiges Plündern deaktiviert.",
     }
     Print(messages[setting] or "Einstellung geändert.")
     if optionChecks[setting] then optionChecks[setting]:SetChecked(enabled) end
@@ -138,7 +141,7 @@ local function CreateOptionsWindow()
     local window, nativeTitle = CreateThemedPanel("SimpleTweaksOptionsWindow")
     optionsWindow = window
     window:Hide()
-    window:SetSize(680, 524)
+    window:SetSize(680, 568)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -171,6 +174,7 @@ local function CreateOptionsWindow()
     AddOption("swingTimer", "Schwungtimer", -376)
     AddOption("fiveSec", "5-Sekunden-Regel", -420)
     AddOption("farmHud", "FarmHUD", -464)
+    AddOption("instantLoot", "Sofort plündern", -508)
 
     local widgetParent = window
 

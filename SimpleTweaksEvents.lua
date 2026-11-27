@@ -99,6 +99,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon, arg2)
             SimpleTweaksDB[key] = value
         end
     end
+    ST.SetInstantLootEnabled(SimpleTweaksDB.instantLoot)
 
     if ST.IsEnabled("disableMapFade") then
         ST.UpdateMapFade(true)

@@ -13,7 +13,7 @@ Ein kleines Addon für World of Warcraft: Forever mit einem bronzefarbenen Einst
 - Einen Schwungtimer als Kreis.
 - Die 5-Sekunden-Regel als Kreis: nach einem Zauber, der Mana kostet, zählt er 5 Sekunden herunter, bis die Spirit-Regeneration wieder einsetzt. Manafreie Zauber lösen sie nicht aus.
 
-Die Karten- und Makro-Funktionen sind standardmäßig aktiv. Haltungsanzeige, NSC-Namen, FPS-Anzeige, Combo-Punkte, Reichweitenindikator, FarmHUD, Schwungtimer und 5-Sekunden-Regel sind standardmäßig ausgeschaltet. Einstellungen werden gespeichert.
+Die Karten- und Makro-Funktionen sind standardmäßig aktiv. Haltungsanzeige, NSC-Namen, FPS-Anzeige, Combo-Punkte, Reichweitenindikator, FarmHUD, Schwungtimer, 5-Sekunden-Regel und sofortiges Plündern sind standardmäßig ausgeschaltet. Einstellungen werden gespeichert.
 
 ## Install
 
@@ -21,7 +21,7 @@ Kopiere den Ordner `SimpleTweaks` in `World of Warcraft/_forever_/Interface/AddO
 
 Die TOC-Datei richtet sich an WoW Forever Interface `16001`.
 
-Die Funktionen liegen in eigenen Dateien: `SimpleTweaksMap`, `SimpleTweaksMacros`, `SimpleTweaksStance`, `SimpleTweaksFps`, `SimpleTweaksRange`, `SimpleTweaksNpc`, `SimpleTweaksCombo`, `SimpleTweaksSwing`, `SimpleTweaksFiveSec`, `SimpleTweaksFarmHud` und `SimpleTweaksOptions`. `SimpleTweaks.lua` hält nur die gemeinsamen Helfer, `SimpleTweaksEvents.lua` die Ereignisse.
+Die Funktionen liegen in eigenen Dateien: `SimpleTweaksMap`, `SimpleTweaksMacros`, `SimpleTweaksStance`, `SimpleTweaksFps`, `SimpleTweaksRange`, `SimpleTweaksNpc`, `SimpleTweaksCombo`, `SimpleTweaksSwing`, `SimpleTweaksFiveSec`, `SimpleTweaksLoot`, `SimpleTweaksFarmHud` und `SimpleTweaksOptions`. `SimpleTweaks.lua` hält nur die gemeinsamen Helfer, `SimpleTweaksEvents.lua` die Ereignisse.
 
 ## Use
 
@@ -39,6 +39,7 @@ Die Funktionen liegen in eigenen Dateien: `SimpleTweaksMap`, `SimpleTweaksMacros
 - Die Option **Blaue Questbereiche anzeigen** folgt während der Projektion der WoW-Einstellung **Questziele anzeigen**. Wenn sie ausgeschaltet ist, deaktiviert FarmHUD diese Einstellung. Das betrifft Questbereiche auf Minimap und Weltkarte sowie Questmarkierungen im Zielverfolger. Beim Zurücksetzen stellt FarmHUD den vorherigen Wert wieder her. In den WoW-Tastenbelegungen kannst du **FarmHUD-Projektion umschalten** belegen. Die Taste funktioniert auch bei ausgeblendetem FarmHUD-Schalter.
 - `/tweaks schwung an|aus` schaltet den Schwungtimer um.
 - `/tweaks regel an|aus` schaltet die 5-Sekunden-Regel um.
+- Die Checkbox **Sofort plündern** sammelt Beute direkt ein und blendet das Beutefenster aus. Bei vollen Taschen, einer nötigen Bindungsbestätigung oder liegen gebliebener Beute erscheint das normale Fenster. Mit der WoW-Umschalttaste für **Automatisch plündern** gilt für diesen Versuch das normale WoW-Verhalten.
 - Die Kreiseinstellungen von Schwungtimer und 5-Sekunden-Regel stehen nicht mehr im Hauptfenster. Neben der Checkbox öffnet **Einstellungen** ein kleines Fenster dafür.
 - Im Bearbeitungsmodus erscheinen nur die aktivierten Timer.
 - Das Einstellungsfenster übernimmt Änderungen sofort und ist auf Deutsch. Neben den Schwungtimer-Einstellungen steht **Vorschau** in einem kleinen, etwas helleren Kasten im Hauptfenster.

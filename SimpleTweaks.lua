@@ -14,6 +14,7 @@ ST.DEFAULTS = {
     hideStanceBar = false,
     npcNameOnly = false,
     showFps = false,
+    instantLoot = false,
     comboPoints = false,
     farmHud = false,
     farmHudSize = 440,
