@@ -39,7 +39,6 @@ local selection = CreateFrame("Frame", nil, display, "BackdropTemplate")
 local enabled = false
 local editing = false
 local dragging = false
-local anchorBackdrop
 local attachedLevelCircle
 local layoutKey = "default"
 local refreshElapsed = 0
@@ -114,12 +113,6 @@ local function SparkOn()
 end
 
 local function CircleSize()
-    if attachedLevelCircle then
-        local size = display:GetWidth()
-        if PlainNumber(size) and size > 0 then
-            return size
-        end
-    end
     local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerCircleSize) or CIRCLE_DEFAULT
     if size < 8 then
         size = 8
@@ -295,9 +288,6 @@ local function EnsureCircle()
     ringHolder:EnableMouse(false)
 
     circleFill = PrepareDisc(display, "BACKGROUND", 1)
-    anchorBackdrop = PrepareDisc(display, "BACKGROUND", 0)
-    anchorBackdrop:SetAllPoints(display)
-    anchorBackdrop:SetVertexColor(0, 0, 0, 1)
     fullDisc = PrepareDisc(pieHolder, "ARTWORK", 0)
 
     wedgeTextures = {}
@@ -336,9 +326,7 @@ local function ApplyCircleGeometry()
         return
     end
     local inner = math.max(1, size - thickness * 2)
-    if not attachedLevelCircle then
-        display:SetSize(size, size)
-    end
+    display:SetSize(size, size)
     pieHolder:ClearAllPoints()
     pieHolder:SetSize(inner, inner)
     pieHolder:SetPoint("CENTER", display, "CENTER", 0, 0)
@@ -458,9 +446,6 @@ local function HidePieLines()
 end
 
 local function HideCircle()
-    if anchorBackdrop then
-        anchorBackdrop:Hide()
-    end
     if circleBorder then
         circleBorder:Hide()
     end
@@ -726,9 +711,6 @@ local function ShowCircle(startTime, duration, progress)
     end
     if not baseShown then
         display:Show()
-        if attachedLevelCircle then
-            anchorBackdrop:Show()
-        end
         circleFill:Show()
         if ringHolder then
             ringHolder:Show()
@@ -772,7 +754,7 @@ local function ApplyFont()
         pcall(text.SetFont, text, "Fonts\\FRIZQT__.TTF", size, "OUTLINE")
     end
     PaintTextColor()
-    if not attachedLevelCircle and TimerStyle() ~= "circle" then
+    if TimerStyle() ~= "circle" then
         display:SetSize(math.max(72, size * 3.4), math.max(28, size + 12))
     end
 end
@@ -1065,7 +1047,7 @@ function SimpleTweaksSwing.ApplyPosition()
     end
     if circle then
         display:ClearAllPoints()
-        if not pcall(display.SetAllPoints, display, circle) then
+        if not pcall(display.SetPoint, display, "CENTER", circle, "CENTER", 0, 0) then
             circle = nil
         end
     end
@@ -1075,16 +1057,7 @@ function SimpleTweaksSwing.ApplyPosition()
         ApplySavedPosition()
     end
 
-    if attachedLevelCircle ~= circle then
-        attachedLevelCircle = circle
-        geomSize = nil
-        if anchorBackdrop then
-            anchorBackdrop:SetShown(circle ~= nil and baseShown)
-        end
-        if baseShown then
-            ApplyCircleGeometry()
-        end
-    end
+    attachedLevelCircle = circle
 end
 
 local function SavePosition()

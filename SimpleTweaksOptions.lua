@@ -377,21 +377,13 @@ local function CreateOptionsWindow()
     local circleSmaller = MakeFontStep("-")
     local circleSizeText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     circleSizeText:SetTextColor(0.9, 0.79, 0.61)
-    circleSizeText:SetWidth(prefix == "swingTimer" and 48 or 28)
+    circleSizeText:SetWidth(28)
     circleSizeText:SetJustifyH("CENTER")
     circleSizeText:SetText(tostring(CurrentCircleSize()))
     local circleLarger = MakeFontStep("+")
     circleSmaller:SetPoint("LEFT", groesseLabel, "RIGHT", 10, 0)
     circleSizeText:SetPoint("LEFT", circleSmaller, "RIGHT", 2, 0)
     circleLarger:SetPoint("LEFT", circleSizeText, "RIGHT", 2, 0)
-
-    local anchorCheck
-    local function PaintCircleSizeMode()
-        local automatic = prefix == "swingTimer" and SimpleTweaksDB and SimpleTweaksDB.swingTimerAnchorPlayer
-        circleSmaller:SetEnabled(not automatic)
-        circleLarger:SetEnabled(not automatic)
-        circleSizeText:SetText(automatic and "Auto" or tostring(CurrentCircleSize()))
-    end
 
     local PaintRahmen
 
@@ -420,6 +412,7 @@ local function CreateOptionsWindow()
     circleSmaller:SetScript("OnClick", function() StepCircle(-1) end)
     circleLarger:SetScript("OnClick", function() StepCircle(1) end)
 
+    local anchorCheck
     if prefix == "swingTimer" then
         anchorCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
         anchorCheck:SetPoint("TOPLEFT", 10, -174)
@@ -432,9 +425,7 @@ local function CreateOptionsWindow()
             elseif SimpleTweaksDB then
                 SimpleTweaksDB.swingTimerAnchorPlayer = self:GetChecked()
             end
-            PaintCircleSizeMode()
         end)
-        PaintCircleSizeMode()
     end
 
     local function CircleFillColor()
@@ -691,7 +682,6 @@ local function CreateOptionsWindow()
     parent:SetScript("OnShow", function()
         if anchorCheck then
             anchorCheck:SetChecked(SimpleTweaksDB.swingTimerAnchorPlayer)
-            PaintCircleSizeMode()
         end
         if mod and mod.SetPreview then
             mod.SetPreview(previewAnchor, true)
