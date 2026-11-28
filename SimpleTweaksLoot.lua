@@ -1,4 +1,4 @@
--- Sofortiges Plündern ohne das Beutefenster anzuzeigen.
+-- Beute direkt bei LOOT_READY anfordern und das Beutefenster ausblenden.
 local ST = SimpleTweaks
 local frame = CreateFrame("Frame")
 local enabled = false
@@ -80,7 +80,7 @@ local function BeginSession()
     end)
 end
 
-local function OnLootReady(autoLoot)
+local function OnLootReady()
     if not enabled or lootHandled then
         return
     end
@@ -98,9 +98,7 @@ local function OnLootReady(autoLoot)
 
     BeginSession()
     lootHandled = true
-    if autoLoot then
-        return
-    end
+    -- Auch bei aktivem WoW-Autoloot sofort anfordern, bevor der Client regulär plündert.
     local attempted = false
     for slot = slotCount, 1, -1 do
         local slotOk, slotType, locked = pcall(function()
@@ -131,7 +129,7 @@ end
 
 frame:SetScript("OnEvent", function(_, event, ...)
     if event == "LOOT_READY" then
-        OnLootReady(...)
+        OnLootReady()
     elseif event == "LOOT_CLOSED" then
         FinishSession(false)
         lootHandled = false
