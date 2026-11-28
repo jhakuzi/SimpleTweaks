@@ -377,13 +377,21 @@ local function CreateOptionsWindow()
     local circleSmaller = MakeFontStep("-")
     local circleSizeText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     circleSizeText:SetTextColor(0.9, 0.79, 0.61)
-    circleSizeText:SetWidth(28)
+    circleSizeText:SetWidth(prefix == "swingTimer" and 48 or 28)
     circleSizeText:SetJustifyH("CENTER")
     circleSizeText:SetText(tostring(CurrentCircleSize()))
     local circleLarger = MakeFontStep("+")
     circleSmaller:SetPoint("LEFT", groesseLabel, "RIGHT", 10, 0)
     circleSizeText:SetPoint("LEFT", circleSmaller, "RIGHT", 2, 0)
     circleLarger:SetPoint("LEFT", circleSizeText, "RIGHT", 2, 0)
+
+    local anchorCheck
+    local function PaintCircleSizeMode()
+        local automatic = prefix == "swingTimer" and SimpleTweaksDB and SimpleTweaksDB.swingTimerAnchorPlayer
+        circleSmaller:SetEnabled(not automatic)
+        circleLarger:SetEnabled(not automatic)
+        circleSizeText:SetText(automatic and "Auto" or tostring(CurrentCircleSize()))
+    end
 
     local PaintRahmen
 
@@ -411,6 +419,23 @@ local function CreateOptionsWindow()
     end
     circleSmaller:SetScript("OnClick", function() StepCircle(-1) end)
     circleLarger:SetScript("OnClick", function() StepCircle(1) end)
+
+    if prefix == "swingTimer" then
+        anchorCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+        anchorCheck:SetPoint("TOPLEFT", 10, -174)
+        anchorCheck:SetChecked(SimpleTweaksDB.swingTimerAnchorPlayer)
+        anchorCheck.Text:SetText("Verankerung am Spielerframe (Levelkreis)")
+        anchorCheck.Text:SetTextColor(0.9, 0.79, 0.61)
+        anchorCheck:SetScript("OnClick", function(self)
+            if mod and mod.SetPlayerFrameAnchor then
+                mod.SetPlayerFrameAnchor(self:GetChecked())
+            elseif SimpleTweaksDB then
+                SimpleTweaksDB.swingTimerAnchorPlayer = self:GetChecked()
+            end
+            PaintCircleSizeMode()
+        end)
+        PaintCircleSizeMode()
+    end
 
     local function CircleFillColor()
         return ClampColor(DB("CircleR"), 1), ClampColor(DB("CircleG"), 0.86), ClampColor(DB("CircleB"), 0.55), ClampColor(DB("CircleA"), 1)
@@ -664,6 +689,10 @@ local function CreateOptionsWindow()
     previewLabel:SetTextColor(0.9, 0.79, 0.61)
 
     parent:SetScript("OnShow", function()
+        if anchorCheck then
+            anchorCheck:SetChecked(SimpleTweaksDB.swingTimerAnchorPlayer)
+            PaintCircleSizeMode()
+        end
         if mod and mod.SetPreview then
             mod.SetPreview(previewAnchor, true)
         end
@@ -705,6 +734,7 @@ local function CreateOptionsWindow()
         end)
     end
     local swingPopup = MakeSettingsPopup("Schwungtimer")
+    swingPopup:SetHeight(240)
     BuildCircleSettings(swingPopup, "swingTimer", "SimpleTweaksSwing")
     local fivePopup = MakeSettingsPopup("5-Sekunden-Regel")
     BuildCircleSettings(fivePopup, "fiveSec", "SimpleTweaksFiveSec")

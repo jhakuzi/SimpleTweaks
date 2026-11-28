@@ -39,6 +39,8 @@ local selection = CreateFrame("Frame", nil, display, "BackdropTemplate")
 local enabled = false
 local editing = false
 local dragging = false
+local anchorBackdrop
+local attachedLevelCircle
 local layoutKey = "default"
 local refreshElapsed = 0
 local watchElapsed = 0
@@ -112,6 +114,12 @@ local function SparkOn()
 end
 
 local function CircleSize()
+    if attachedLevelCircle then
+        local size = display:GetWidth()
+        if PlainNumber(size) and size > 0 then
+            return size
+        end
+    end
     local size = tonumber(SimpleTweaksDB and SimpleTweaksDB.swingTimerCircleSize) or CIRCLE_DEFAULT
     if size < 8 then
         size = 8
@@ -287,6 +295,9 @@ local function EnsureCircle()
     ringHolder:EnableMouse(false)
 
     circleFill = PrepareDisc(display, "BACKGROUND", 1)
+    anchorBackdrop = PrepareDisc(display, "BACKGROUND", 0)
+    anchorBackdrop:SetAllPoints(display)
+    anchorBackdrop:SetVertexColor(0, 0, 0, 1)
     fullDisc = PrepareDisc(pieHolder, "ARTWORK", 0)
 
     wedgeTextures = {}
@@ -325,7 +336,9 @@ local function ApplyCircleGeometry()
         return
     end
     local inner = math.max(1, size - thickness * 2)
-    display:SetSize(size, size)
+    if not attachedLevelCircle then
+        display:SetSize(size, size)
+    end
     pieHolder:ClearAllPoints()
     pieHolder:SetSize(inner, inner)
     pieHolder:SetPoint("CENTER", display, "CENTER", 0, 0)
@@ -445,6 +458,9 @@ local function HidePieLines()
 end
 
 local function HideCircle()
+    if anchorBackdrop then
+        anchorBackdrop:Hide()
+    end
     if circleBorder then
         circleBorder:Hide()
     end
@@ -710,6 +726,9 @@ local function ShowCircle(startTime, duration, progress)
     end
     if not baseShown then
         display:Show()
+        if attachedLevelCircle then
+            anchorBackdrop:Show()
+        end
         circleFill:Show()
         if ringHolder then
             ringHolder:Show()
@@ -753,7 +772,7 @@ local function ApplyFont()
         pcall(text.SetFont, text, "Fonts\\FRIZQT__.TTF", size, "OUTLINE")
     end
     PaintTextColor()
-    if TimerStyle() ~= "circle" then
+    if not attachedLevelCircle and TimerStyle() ~= "circle" then
         display:SetSize(math.max(72, size * 3.4), math.max(28, size + 12))
     end
 end
@@ -1007,13 +1026,11 @@ local function AnchorToCenter(cx, cy)
     display:SetPoint("CENTER", UIParent, "CENTER", cx - px, cy - py)
 end
 
-function SimpleTweaksSwing.ApplyPosition()
-    if dragging or not display then
-        return
-    end
+local function ApplySavedPosition()
+    display:ClearAllPoints()
+    display:SetClampedToScreen(true)
     local layouts = SimpleTweaksDB and SimpleTweaksDB.swingTimerLayouts
     local pos = layouts and layouts[layoutKey]
-    display:ClearAllPoints()
     if type(pos) == "table" and type(pos.point) == "string" then
         display:SetPoint(pos.point, UIParent, pos.relativePoint or pos.point, pos.x or 0, pos.y or 0)
     else
@@ -1021,8 +1038,57 @@ function SimpleTweaksSwing.ApplyPosition()
     end
 end
 
+local function AnchorSettingEnabled()
+    return SimpleTweaksDB and SimpleTweaksDB.swingTimerAnchorPlayer == true
+end
+
+local function PlayerLevelCircle()
+    local playerFrame = PlayerFrame
+    local content = playerFrame and playerFrame.PlayerFrameContent
+    local main = content and content.PlayerFrameContentMain
+    local circle = main and main.LevelBackgroundCircle
+    if circle then
+        local width, height = circle:GetSize()
+        if PlainNumber(width) and PlainNumber(height) and width > 0 and height > 0 then
+            return circle
+        end
+    end
+end
+
+function SimpleTweaksSwing.ApplyPosition()
+    if dragging then
+        return
+    end
+    local circle = AnchorSettingEnabled() and PlayerLevelCircle() or nil
+    if circle and circle == attachedLevelCircle then
+        return
+    end
+    if circle then
+        display:ClearAllPoints()
+        if not pcall(display.SetAllPoints, display, circle) then
+            circle = nil
+        end
+    end
+    if circle then
+        display:SetClampedToScreen(false)
+    else
+        ApplySavedPosition()
+    end
+
+    if attachedLevelCircle ~= circle then
+        attachedLevelCircle = circle
+        geomSize = nil
+        if anchorBackdrop then
+            anchorBackdrop:SetShown(circle ~= nil and baseShown)
+        end
+        if baseShown then
+            ApplyCircleGeometry()
+        end
+    end
+end
+
 local function SavePosition()
-    if not SimpleTweaksDB then
+    if not SimpleTweaksDB or AnchorSettingEnabled() then
         return
     end
     if display:IsShown() then
@@ -1053,9 +1119,9 @@ local function EnterEditMode()
     display.editing = true
     display:SetFrameStrata("TOOLTIP")
     display:SetFrameLevel(400)
-    display:EnableMouse(true)
-    selection:EnableMouse(true)
-    selection:Show()
+    display:EnableMouse(not AnchorSettingEnabled())
+    selection:EnableMouse(not AnchorSettingEnabled())
+    selection:SetShown(not AnchorSettingEnabled())
     pieStamp = nil
     sampleStart = nil
     if layoutKey == "default" and C_EditMode and C_EditMode.GetLayouts then
@@ -1065,7 +1131,11 @@ local function EnterEditMode()
         end
     end
     RefreshText()
-    AnchorToCenter(cx, cy)
+    if AnchorSettingEnabled() then
+        SimpleTweaksSwing.ApplyPosition()
+    else
+        AnchorToCenter(cx, cy)
+    end
 end
 
 local function ExitEditMode()
@@ -1088,9 +1158,13 @@ local function ExitEditMode()
     selection:EnableMouse(false)
     selection:Hide()
     RefreshText()
-    AnchorToCenter(cx, cy)
-    SavePosition()
-    SimpleTweaksSwing.ApplyPosition()
+    if AnchorSettingEnabled() then
+        SimpleTweaksSwing.ApplyPosition()
+    else
+        AnchorToCenter(cx, cy)
+        SavePosition()
+        SimpleTweaksSwing.ApplyPosition()
+    end
     RefreshText()
 end
 
@@ -1120,6 +1194,9 @@ editWatch:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 local function HookEditMode()
+    if AnchorSettingEnabled() then
+        SimpleTweaksSwing.ApplyPosition()
+    end
     SyncEditMode()
 end
 
@@ -1294,6 +1371,22 @@ function SimpleTweaksSwing.SetEnabled(on)
     RefreshText()
 end
 
+function SimpleTweaksSwing.SetPlayerFrameAnchor(on)
+    if not SimpleTweaksDB then
+        return
+    end
+    SimpleTweaksDB.swingTimerAnchorPlayer = on and true or false
+    if dragging then
+        display:StopMovingOrSizing()
+        dragging = false
+    end
+    display:EnableMouse(editing and not AnchorSettingEnabled())
+    selection:EnableMouse(editing and not AnchorSettingEnabled())
+    selection:SetShown(editing and not AnchorSettingEnabled())
+    SimpleTweaksSwing.ApplyPosition()
+    RefreshText()
+end
+
 local function HandleSwing(duration, swingType)
     if not knownHands[swingType] then
         return
@@ -1351,7 +1444,7 @@ display:SetMovable(true)
 display:EnableMouse(false)
 display:RegisterForDrag("LeftButton")
 display:SetScript("OnDragStart", function(self)
-    if not editing or InCombatLockdown() then
+    if not editing or AnchorSettingEnabled() or InCombatLockdown() then
         return
     end
     dragging = true
@@ -1370,7 +1463,7 @@ selection:SetAllPoints()
 selection:EnableMouse(false)
 selection:RegisterForDrag("LeftButton")
 selection:SetScript("OnDragStart", function()
-    if not editing or InCombatLockdown() then
+    if not editing or AnchorSettingEnabled() or InCombatLockdown() then
         return
     end
     dragging = true

@@ -21,6 +21,7 @@ ST.DEFAULTS = {
     farmHudRotate = false,
     farmHudQuestBlobs = true,
     swingTimer = false,
+    swingTimerAnchorPlayer = false,
     swingTimerFontSize = 18,
     swingTimerDecimals = 1,
     swingTimerColorR = 1,
